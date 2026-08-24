@@ -4,11 +4,13 @@
 
 PixelForge combines promptable segmentation, generative inpainting, structural and semantic consistency, model adapters and routing, quantitative evaluation, and a web interface into one reproducible research platform.
 
-> ## STATUS: PHASE 3 COMPLETE — 1 OF 7 MODELS VALIDATED
+> ## STATUS: PHASE 4 COMPLETE — 2 OF 7 MODELS VALIDATED
 >
-> **SAM 2.1 Hiera-Tiny is validated on Apple MPS and classified `LOCAL_MPS`.** Real segmentation inference executed on the Apple M3 Pro GPU from verified trained weights and produced valid non-empty masks — 0.1508 s warm, ~1.2 GiB driver-allocated, no CPU fallback, no modification to the research algorithm. Full record: `docs/experiments/SAM2_MPS_VALIDATION.md`.
+> **SAM 2.1 Hiera-Tiny is validated on Apple MPS and classified `LOCAL_MPS` (`PASS`).** Real segmentation inference executed on the Apple M3 Pro GPU from verified trained weights and produced valid non-empty masks — 0.1508 s warm, ~1.2 GiB driver-allocated, no CPU fallback, no modification to the research algorithm. Full record: `docs/experiments/SAM2_MPS_VALIDATION.md`.
 >
-> **The other six models remain unvalidated and unclassified.** All seven research repositories are cloned and pinned to exact commit SHAs (`research/upstream/LOCKFILE.md`), but acquisition is not validation. Every capability listed below is still **planned**, not working: one validated segmentation backend is half of the MVP path, and no inpainting backend has passed its gate yet. No claim of working inference should be added for any component until a real execution on real hardware has been recorded for it.
+> **Moebius is validated on Apple MPS and classified `LOCAL_MPS` (`CONDITIONAL`).** Real generative inpainting executed on the same GPU from verified trained weights and produced a valid non-empty 512×512 result — 21.9121 s warm, ~4.5 GiB driver-allocated, no CPU fallback, no modification to the research algorithm. The verdict is `CONDITIONAL`, not `PASS`, because student inference on Apple Silicon requires a documented PixelForge-side import-isolation workaround (to avoid loading the CUDA-only PixelHacker teacher) that does not alter the research method. No accuracy claim is made and it is not production-ready. Full record: `docs/experiments/MOEBIUS_MPS_VALIDATION.md`.
+>
+> **This completes the two-model MVP dependency** — one segmentation backend plus one inpainting backend — but neither is wired into a pipeline yet, and the SAM 2 → Moebius handoff is verified only at the mask-contract level, not end to end. **The other five models remain unvalidated and unclassified.** All seven research repositories are cloned and pinned to exact commit SHAs (`research/upstream/LOCKFILE.md`), but acquisition is not validation. Every capability listed below is still **planned**, not working. No claim of working inference should be added for any component until a real execution on real hardware has been recorded for it.
 >
 > A previous PixelForge working tree was deleted on 2026-08-24 with no git remote and no recoverable history. This rebuild treats provenance and recoverability as prerequisites rather than afterthoughts.
 
@@ -28,7 +30,7 @@ Three commitments shape the design:
 
 ## Planned capabilities
 
-Nothing below is implemented as a user-facing capability yet. SAM 2 segmentation is validated as a model (Phase 3) but is not wired into any pipeline.
+Nothing below is implemented as a user-facing capability yet. SAM 2 segmentation (Phase 3) and Moebius inpainting (Phase 4) are validated as models but neither is wired into any pipeline.
 
 **Selection and masking**
 - Image upload

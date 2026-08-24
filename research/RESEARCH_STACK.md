@@ -1,8 +1,8 @@
 # Research Stack Plan
 
-STATUS: **1 OF 7 VALIDATED — SAM 2 PASSED ITS GATE AND IS CLASSIFIED `LOCAL_MPS`.**
+STATUS: **2 OF 7 VALIDATED — SAM 2 PASSED ITS GATE (`LOCAL_MPS` / `PASS`) AND MOEBIUS PASSED ITS GATE (`LOCAL_MPS` / `CONDITIONAL`).**
 
-All seven research components have been cloned and pinned to exact commit SHAs (see [`research/upstream/LOCKFILE.md`](upstream/LOCKFILE.md)). **Acquisition is not validation.** Phase 3 ran the SAM 2 gate on real hardware and returned `PASS`: real segmentation inference executed on the Apple M3 Pro GPU via MPS. SAM 2 is therefore `VALIDATED` / `LOCAL_MPS`. The remaining six `Status` fields still read `NOT YET VALIDATED`, and none will change until that component has passed the full validation gate on real hardware.
+All seven research components have been cloned and pinned to exact commit SHAs (see [`research/upstream/LOCKFILE.md`](upstream/LOCKFILE.md)). **Acquisition is not validation.** Phase 3 ran the SAM 2 gate on real hardware and returned `PASS`: real segmentation inference executed on the Apple M3 Pro GPU via MPS. SAM 2 is therefore `VALIDATED` / `LOCAL_MPS`. Phase 4 has now taken Moebius through the full gate and returned `CONDITIONAL`: real generative inpainting executed on the same GPU, all 11 checks passed, but student inference on Apple Silicon requires a documented PixelForge-side import-isolation workaround that does not alter the research method. Moebius is therefore `VALIDATED (CONDITIONAL)` / `LOCAL_MPS`. The remaining five `Status` fields still read `NOT YET VALIDATED`, and none will change until that component has passed the full validation gate on real hardware.
 
 Provenance (remote, commit SHA, license) is tracked separately and authoritatively in [`research/upstream/REPOSITORIES.md`](upstream/REPOSITORIES.md). This document covers intended role and validation state.
 
@@ -10,7 +10,7 @@ Provenance (remote, commit SHA, license) is tracked separately and authoritative
 
 ## No compatibility is claimed beyond what has been measured
 
-Only SAM 2 has been measured. For the other six components, nothing here asserts that they run on this host, in any configuration.
+Only SAM 2 and Moebius have been measured. For the other five components, nothing here asserts that they run on this host, in any configuration.
 
 - `Execution` is `TBD` where no dependency or device audit has been performed.
 - `Local/cloud` is `TBD — NOT YET DETERMINED` because placement is an empirical outcome, not a design decision. Assigning it before measurement would be a guess.
@@ -93,15 +93,51 @@ Full record: [`docs/experiments/SAM2_MPS_VALIDATION.md`](../docs/experiments/SAM
 
 **Purpose:** Generative inpainting. Candidate inpainting backend (**Priority A**) — first to be evaluated.
 
-**Execution:** TBD
+**Execution:** **Apple MPS (float32)** — measured, not assumed
 
-**Local/cloud:** TBD — NOT YET DETERMINED
+**Local/cloud:** **`LOCAL_MPS`**
 
-**Status:** **NOT YET VALIDATED**
+**Status:** **VALIDATED (`CONDITIONAL`) — 2026-08-24**
 
-**Target phase:** Phase 4.
+**Target phase:** Phase 4. **Complete.**
 
-**Notes:** Evaluated ahead of the other inpainting backends. Acceptance requires producing a valid image **without modifying the research algorithm**. Training-only and CUDA-only dependencies are to be avoided where they are not required for inference.
+**Notes:** Evaluated ahead of the other inpainting backends. Acceptance required producing a valid image **without modifying the research algorithm** — met. Training-only and CUDA-only dependencies were excluded where not required for inference, and none of the exclusions turned out to be needed.
+
+### Validated facts (Phase 4, 2026-08-24)
+
+| Property | Value |
+|---|---|
+| Verdict | **`CONDITIONAL`** — 11 of 11 criteria met |
+| Commit | `b88d462bacb9af6e7128a3b4cc4a07418bedfd61` (verified twice, re-checked after the run) |
+| License | `Apache-2.0` — `README.md:186`, covers code and pretrained weights |
+| Environment | **`pixelforge-moebius`** (`/opt/anaconda3/envs/pixelforge-moebius`), Python 3.11.15 |
+| torch / torchvision / numpy | 2.13.0 / 0.28.0 / 2.4.6 |
+| diffusers / transformers | 0.40.0 / 5.15.1 |
+| Device | **`mps`** — student and VAE both `mps:0`, no CPU fallback |
+| Student parameters | **226 041 531** (226.04 M) |
+| VAE parameters | 83 653 863 (83.65 M), `AutoencoderKL`, scaling 0.13025 |
+| Student checkpoint | `ft_places2/diffusion_pytorch_model.bin`, 863.36 MiB, sha256 `6525afb8…6a09a` |
+| VAE checkpoint | `vae/` (config.json + .bin), 159.64 MiB, from `hustvl/PixelHacker` |
+| Weights verified loaded | **1203 tensors matched element-wise, 0 mismatched** |
+| Model load / VAE load | 2.1335 s / 0.2174 s |
+| Cold latency | 21.8105 s |
+| **Warm latency** | **21.9121 s** (best of 3; mean 22.0682 s) at 512×512, 20 steps, batch 1 |
+| Per denoising step | 1.0956 s |
+| Memory | peak RSS 1589.23 MiB; **MPS driver-allocated 4498.22 MiB** of a 12288.02 MiB recommended ceiling (36.6 %) |
+| Output | 512×512 RGB, finite, non-constant, 203 unique values, PNG lossless |
+| Upstream modified | **No** — 0 changed files and 0 `__pycache__`, before and after |
+
+**Why `CONDITIONAL` and not `PASS`.** `PASS` requires no compatibility workaround at all. On Apple Silicon the student cannot be imported without one: `model_lib/__init__.py:6` imports the CUDA-only PixelHacker **teacher**, whose chain reaches `flash-linear-attention` → Triton, which publishes no Apple Silicon wheels. Python executes a package's `__init__.py` before any submodule, so the *student* import dies on the *teacher's* dependency.
+
+Resolved **without touching upstream**, by seeding `sys.modules['model_lib']` with a surrogate package that carries the real `__path__` and an empty body, then re-exporting exactly the 13 symbols `__init__.py` lines 2–3 provide and omitting only line 6 (the teacher). Verified teacher-free by execution, checked twice. The workaround **does not** modify upstream files, **does not** change the student architecture, **does not** stub or replace any research operation — it only controls import resolution. **This is a preserved, load-bearing requirement: it must survive into the adapter layer at Phase 6.**
+
+Cold/warm ratio is **1.0×** — against SAM 2's 23× — because Moebius spends essentially all of its time in 20 sequential UNet denoising steps rather than one-off shader compilation. **Design consequence: pre-warming Moebius buys nothing, and latency scales linearly with step count at ~1.10 s/step.**
+
+Also confirmed: the entry contract is PIL **RGB** image + PIL **`'L'`** grayscale mask with **WHITE (255) = inpaint, BLACK (0) = keep**, so the intended `SAM 2 boolean → uint8 0/255 → Moebius` chain is **correct**; and no text encoder, tokenizer or CLIP is on the inference path — `input_ids` index a learned `nn.Embedding(20, 3072)`.
+
+No PSNR/SSIM/LPIPS/FID or any reference-dependent metric is reported — no ground truth exists for a synthetic scene. **This is a reproducibility result, not an accuracy result, and not a claim of production readiness:** ~21.9 s per 512×512 image is a substantial UX constraint, recorded as a measurement and not endorsed as acceptable.
+
+Full record: [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](../docs/experiments/MOEBIUS_MPS_VALIDATION.md). Harness: [`tests/smoke/test_moebius_mps.py`](../tests/smoke/test_moebius_mps.py).
 
 ## 4. BrushNet
 
@@ -163,13 +199,13 @@ Full record: [`docs/experiments/SAM2_MPS_VALIDATION.md`](../docs/experiments/SAM
 |---|---|---|---|---|---|
 | 1 | SAM 2 | Segmentation | Core / MVP | 3 | **VALIDATED — `LOCAL_MPS`** |
 | 2 | PixelHacker | Inpainting | B | 5 | NOT YET VALIDATED |
-| 3 | Moebius | Inpainting | A | 4 | NOT YET VALIDATED |
+| 3 | Moebius | Inpainting | A | 4 | **VALIDATED (`CONDITIONAL`) — `LOCAL_MPS`** |
 | 4 | BrushNet | Inpainting | C | contingent | NOT YET VALIDATED |
 | 5 | ControlNet | Structural conditioning | Later | 12 | NOT YET VALIDATED |
 | 6 | InstructPix2Pix | Instruction editing | Later | 12 | NOT YET VALIDATED |
 | 7 | Grounded-Segment-Anything | Text-guided grounding | Later | 11 | NOT YET VALIDATED |
 
-**1 of 7 validated. 7 of 7 acquired and pinned. 1 of 7 classified.**
+**2 of 7 validated. 7 of 7 acquired and pinned. 2 of 7 classified.**
 
 ## MVP dependency
 
@@ -181,4 +217,11 @@ UPLOAD → CLICK → SAM 2 SEGMENTATION → EDITABLE MASK
     → BEFORE / MASK / AFTER → PERFORMANCE METADATA
 ```
 
-That is SAM 2 (Phase 3) plus the first inpainting backend to pass its gate (Moebius at Phase 4, else PixelHacker at Phase 5, else BrushNet). **SAM 2 is done**, so exactly one inpainting backend now stands between the project and the MVP. The remaining four components are explicitly **not** MVP blockers and must not be started before the MVP path works end to end.
+**Both are now validated: SAM 2 (Phase 3, `PASS`) and Moebius (Phase 4, `CONDITIONAL`).** Moebius is a viable candidate for the local MVP inpainting backend, subject to preserving the documented import-isolation strategy. The remaining four components are explicitly **not** MVP blockers and must not be started before the MVP path works end to end.
+
+Two constraints the MVP design must carry:
+
+- **The import isolation is load-bearing.** Any adapter that imports `model_lib` before installing the surrogate will fail on `fla`. This must be preserved at Phase 6, not rediscovered.
+- **Latency is dominated by inpainting, not segmentation.** SAM 2 warm is 0.1508 s; Moebius warm is 21.9121 s — roughly **145×** more. The end-to-end warm path is therefore ~22 s, essentially all of it Moebius, and pre-warming does not help (cold/warm ratio 1.0×). Step count at ~1.10 s/step is the only obvious lever, and its quality cost is unmeasured.
+
+Neither component has been integrated yet: the SAM 2 → Moebius handoff has been verified only at the level of the mask contract (RGB + `'L'` mask, WHITE = inpaint), not end to end with a real SAM 2 mask. That is the Phase 6 integration test.

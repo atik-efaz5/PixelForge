@@ -1,10 +1,12 @@
 # Environment Plan
 
-STATUS: **PHASE 3 COMPLETE — ONE VALIDATED ENVIRONMENT OF RECORD EXISTS (`pixelforge-sam2-v2`).**
+STATUS: **PHASE 4 COMPLETE — TWO VALIDATED ENVIRONMENTS OF RECORD: `pixelforge-sam2-v2` (SAM 2, `PASS`) AND `pixelforge-moebius` (MOEBIUS, `CONDITIONAL`).**
 
 The first isolated environment has been created and validated: **`pixelforge-sam2-v2`** (Python 3.11.15, torch 2.13.0), in which SAM 2.1 Hiera-Tiny executed real segmentation inference on Apple MPS. A pre-existing environment named `pixelforge-sam2` — no `-v2` — was found on the host, audited, and **disqualified**: it is bound to the deleted project tree. Details in §11 and in [`docs/experiments/SAM2_MPS_VALIDATION.md`](experiments/SAM2_MPS_VALIDATION.md).
 
-Sections 1–10 describe the rules that govern environment creation. Section 11 records what was actually measured.
+A second environment, **`pixelforge-moebius`**, has been created for Phase 4, passes the same editable-install audit, and has now **executed real generative inpainting on MPS** — verdict **`CONDITIONAL`**, all 11 gate checks passed. It is `CONDITIONAL` rather than `PASS` because student inference on Apple Silicon requires a PixelForge-side import-isolation workaround that does **not** alter the research method. Details in §12 and in [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](experiments/MOEBIUS_MPS_VALIDATION.md).
+
+Sections 1–10 describe the rules that govern environment creation. Sections 11–12 record what was actually measured, per model.
 
 ---
 
@@ -132,7 +134,7 @@ Cloud execution is deferred until a model actually requires it (anticipated at P
 | 1 | **None** — plan only | **None** | Done |
 | 2 | None. Clone and pin repositories only. | None | Done |
 | 3 | Create isolated SAM 2 environment; verify MPS | SAM 2.1 Hiera-Tiny only | **DONE** — `pixelforge-sam2-v2` created, checkpoint acquired (148.78 MiB), MPS inference validated `PASS` (§11) |
-| 4 | Create isolated Moebius environment | Minimal Moebius inference checkpoint | In progress (Phase 4) |
+| 4 | Create isolated Moebius environment | Moebius `ft_places2` student + SD VAE only | **DONE** — `pixelforge-moebius` created and audited; both checkpoints downloaded; real MPS inference executed; verdict **`CONDITIONAL`**, 11/11 checks passed (§12) |
 | 5 | Create PixelHacker environment, local or cloud per audit | Minimal PixelHacker inference checkpoint | Not started |
 | 6+ | Reuse validated environments; add only as needed | As validated | Not started |
 
@@ -142,7 +144,7 @@ Unresolved, to be answered by measurement rather than assumption:
 
 1. Does PyTorch MPS work for the operator sets these models require? (Phase 3 onward, per model.) — **ANSWERED FOR SAM 2: yes.** The full SAM 2.1 Hiera-Tiny image-inference operator set executed on MPS with no fallback and no error, producing correct masks. This is a per-model answer and does not generalize to the other six.
 2. What is the maximum inpainting resolution that fits in 18 GB, per backend? (Phase 4 onward.)
-3. Can a segmentation model and an inpainting model be co-resident, or must the pipeline serialize `load()`/`unload()`? (Phase 7.) — **PARTIAL INPUT MEASURED:** SAM 2.1 Hiera-Tiny holds 1205.92 MiB driver-allocated against a 12288.02 MiB recommended ceiling, so ~11 GiB remains for an inpainting model. Whether that is enough depends on the backend, which Phase 4 measures.
+3. Can a segmentation model and an inpainting model be co-resident, or must the pipeline serialize `load()`/`unload()`? (Phase 7.) — **BOTH INPUTS NOW MEASURED, ANSWER LIKELY YES:** SAM 2.1 Hiera-Tiny holds 1205.92 MiB driver-allocated and Moebius holds 4498.22 MiB, against a 12288.02 MiB recommended ceiling. Their sum is 5704.14 MiB — **46.4 %** of the ceiling — so co-residency at 512×512 appears feasible with ~6.4 GiB spare. **Not yet demonstrated:** the two have never been resident in one process simultaneously, and Apple's unified pool means the figures are not guaranteed to add linearly. Phase 7 must measure it directly.
 4. Does PixelHacker have a viable non-CUDA inference path? (Phase 5.)
 5. Which upstream commit of each repository is compatible with a modern Python 3.12 / arm64 toolchain? (Phase 2–3.) — **ANSWERED FOR SAM 2:** the pinned commit runs correctly under Python **3.11.15** with torch 2.13.0 / torchvision 0.28.0 / numpy 2.4.6 on arm64, satisfying all 7 lower-bound-only requirements.
 6. Is Metal reachable from the execution contexts this project actually runs in? (New, raised by Phase 3.) — **ANSWERED: it depends on the context, and both outcomes were observed on this one host.** An interactive session reached Metal and ran the inference; a non-interactive session got `MTLCreateSystemDefaultDevice()` → NULL. Hardware capability, PyTorch MPS support, and per-process Metal reachability are three separable facts, and every device audit must record all three.
@@ -266,3 +268,120 @@ This is preferred over `pip install -e .` for three reasons, all specific to SAM
 | Upstream-published checksum | **none exists** |
 
 The SHA-256 is a **local re-acquisition anchor**, not verification against an upstream value. Weights were verified genuinely loaded by comparing 470 checkpoint tensors element-wise against the built model's parameters (0 mismatched) — necessary because `build_sam2` accepts `**kwargs` it never reads, so a dropped `ckpt_path` would otherwise yield a silently random-initialized model.
+
+---
+
+## 12. Measured facts (Phase 4, 2026-08-24) — Moebius
+
+Phase 4 is **complete**, verdict **`CONDITIONAL`**, classification **`LOCAL_MPS`**. Real generative inpainting executed on the M3 Pro GPU and all 11 gate checks passed. Every figure below is copied from the authoritative machine-readable record `outputs/moebius_mps_validation/result.json`. Full record: [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](experiments/MOEBIUS_MPS_VALIDATION.md).
+
+### The Moebius environment
+
+| Property | Value |
+|---|---|
+| Name | **`pixelforge-moebius`** |
+| Python | 3.11.15 |
+| Prefix | `/opt/anaconda3/envs/pixelforge-moebius` |
+| Interpreter (ground truth) | `/opt/anaconda3/envs/pixelforge-moebius/bin/python` |
+| Editable-install audit | **clean** — no `__editable__*` finder, no outward `direct_url.json` |
+| Validation state | **`CONDITIONAL`** — 11/11 checks passed on real MPS |
+
+`pixelforge-sam2-v2` was not modified. The two environments share no packages, which is exactly the isolation §3 requires: Moebius pulls `transformers`, `timm`, `einops`, `opencv-python` and `diffusers`, none of which SAM 2 needs.
+
+**Isolation is now proven, not just intended.** `pixelforge-sam2-v2` raises `ModuleNotFoundError` for `diffusers`, `transformers` and `einops` — the packages Moebius requires. Neither environment can satisfy the other's dependencies, which is the strongest available evidence that they are genuinely separate.
+
+### Environment-label discrepancy — identified and corrected
+
+`result.json` records `python_executable = /opt/anaconda3/envs/pixelforge-moebius/bin/python` but `conda_env = pixelforge-sam2-v2` and `conda_prefix = /opt/anaconda3/envs/pixelforge-sam2-v2`.
+
+**Cause:** the interpreter was invoked by absolute path from a shell where `pixelforge-sam2-v2` was still activated. `CONDA_DEFAULT_ENV` and `CONDA_PREFIX` are *shell* variables set by `conda activate`; running another environment's interpreter directly does not update them.
+
+**Resolution:** the interpreter is authoritative, the conda label is not. Proven by execution — the run imported `diffusers` 0.40.0 and `transformers` 5.15.1 and built a 226 M-parameter diffusers UNet, all of which are impossible in `pixelforge-sam2-v2`. The environment of record for Phase 4 is **`pixelforge-moebius`**. **No measurement is affected and no re-run was required**; only the label was wrong. Phase 3's record is likewise unaffected — `pixelforge-sam2-v2` was activated but never written to.
+
+**Operational rule added for later phases: record `sys.executable` and `sys.prefix` as provenance, never `CONDA_DEFAULT_ENV` alone.** The harness captured all three, which is the only reason the discrepancy was detectable.
+
+| Package | Installed | Upstream pin | Note |
+|---|---|---|---|
+| torch | 2.13.0 | `2.7.1+cu130` | CUDA wheel does not exist for arm64 |
+| torchvision | 0.28.0 | unpinned | |
+| diffusers | 0.40.0 | `0.38.0` | deviation, verified by execution |
+| transformers | 5.15.1 | unpinned | import-time only; no tokenizer runs |
+| accelerate | 1.14.0 | `1.14.0` | matches |
+| timm | 1.0.28 | unpinned | |
+| einops | 0.8.2 | **absent** | genuine gap in upstream requirements |
+| opencv-python | 5.0.0.93 | unpinned | |
+| omegaconf | 2.3.1 | unpinned | on the real inference path |
+| `flash-linear-attention` | **absent** | `[cuda]==0.3.2` | impossible on Apple Silicon |
+| `triton` | **absent** | transitive | no macOS/ARM64 wheels |
+
+### The dependency finding that defines Phase 4
+
+`flash-linear-attention` requires Triton, which publishes no Apple Silicon wheels. It is therefore **not installable on this host at any version**. It is also teacher-only — student inference needs nothing from it — yet it blocks the student import, because `model_lib/__init__.py:6` imports the PixelHacker teacher and Python executes a package's `__init__.py` before any submodule.
+
+Resolved **without modifying upstream**, by seeding `sys.modules['model_lib']` with a surrogate package carrying the real `__path__` and an empty body, then re-exporting exactly what `__init__.py` lines 2–3 export. Verified by execution: `fla`, `triton`, `unet_gla` and `layers.gla` are all absent from `sys.modules` — checked twice, including after `removal.v1_2`'s own `__init__` runs; 13 student symbols exported; upstream 0 changed files, 0 `__pycache__`, before and after.
+
+**This workaround is load-bearing and must be preserved into the adapter layer at Phase 6.** Any code path that imports `model_lib` before the surrogate is installed will pull the teacher and fail on `fla`. It is the sole reason the verdict is `CONDITIONAL` rather than `PASS`, and it cannot be discharged — it is a permanent property of this commit on this platform.
+
+This is a general lesson for the remaining five components, not a Moebius quirk: **a research repository's `__init__.py` may couple components that are logically independent.** The dependency audit must trace the actual import graph, not the requirements file. Expect the same pattern at Phase 5 (PixelHacker is the teacher here) and at Phase 11 (Grounded-SAM ships CUDA-compiled extensions).
+
+### Device audit — the per-process condition, now observed from both sides
+
+| Fact | Phase 4 automated session | Phase 4 interactive run |
+|---|---|---|
+| `torch.backends.mps.is_built()` | True | **True** |
+| `torch.backends.mps.is_available()` | **False** | **True** |
+| `MTLCreateSystemDefaultDevice()` | **NULL** | **device created** |
+| `torch.ones((2,2), device="mps")` | not executed | **executed, result verified correct** |
+
+§11 records that Metal reachability is a property of the **process**, not the machine. Phase 4 confirms it from both sides on the same host, minutes apart: the automated session saw no Metal device, the interactive terminal saw a working one. **The GPU was never the problem.** Every future model gate should assume the automated session may be Metal-less and plan the interactive handoff up front.
+
+Hardware confirmed at run time: `macOS-15.7.9-arm64` (build 24G830), Apple M3 Pro, 11/11 cores, 19 327 352 832 B unified memory.
+
+### Performance and memory — measured
+
+512×512, 20 steps, batch 1, float32, `mps`, `ft_places2` weights. No figure is estimated and no CUDA benchmark informs any of them.
+
+| Metric | Value |
+|---|---|
+| Student model load (build 1.1892 + weights 0.9443) | **2.1335 s** |
+| VAE load | **0.2174 s** |
+| First (cold) inference | **21.8105 s** |
+| Warm inference (best of 3) | **21.9121 s** |
+| Warm inference (mean of 3) | 22.0682 s |
+| Per denoising step (warm) | **1.0956 s** |
+| Cold / warm ratio | **1.0×** |
+| Process peak RSS | **1589.23 MiB** |
+| MPS current allocated | 1182.09 MiB |
+| **MPS driver allocated** | **4498.22 MiB** |
+| MPS recommended max | 12288.02 MiB |
+| Headroom used | **36.6 %** of the ceiling |
+
+The design ceiling is `torch.mps.recommended_max_memory()` = **12288.02 MiB** (measured in §11), not the nominal 18 GiB, and RSS and MPS allocator figures **overlap and must not be summed**. Moebius's student is 226 041 531 parameters — **5.8× SAM 2's 38.96 M** — plus an 83 653 863-parameter SD VAE, both float32. Against that ceiling it lands at 36.6 %: **no memory pressure at this resolution**, and failure class F did not occur.
+
+Two results worth carrying forward:
+
+- **There is no cold-start penalty to exploit.** The cold/warm ratio is 1.0×, against SAM 2's 23×. SAM 2's cold cost was one-off shader compilation amortized over an 0.0086 s warm inference; Moebius spends essentially all of its time in 20 sequential UNet steps, which dwarf compilation. **Design consequence: caching or pre-warming Moebius buys nothing.** Latency scales linearly with `num_steps` at ~1.10 s/step, so step count is the only obvious lever — and its quality cost is unmeasured.
+- **~21.9 s per image is a hard UX constraint, not a validated target.** It is recorded as a measurement. Nothing here endorses it as acceptable for interactive use, and no optimization (batching, step reduction, float16, quantization) has been evaluated.
+
+### Checkpoint policy for Moebius
+
+Exactly two files, both git-ignored under `checkpoints/moebius/`, **both now downloaded and verified**:
+
+| Role | Size | Source |
+|---|---|---|
+| Student `ft_places2` | 905 298 356 B (863.36 MiB), sha256 `6525afb8…6a09a` | `https://huggingface.co/hustvl/Moebius/resolve/main/ft_places2/diffusion_pytorch_model.bin` |
+| SD VAE (`sdvae_f8d4`) | 167 395 094 B (159.64 MiB) | `https://huggingface.co/hustvl/PixelHacker/tree/main/vae` |
+
+The student checkpoint loaded with `weights_only=True`, yielded 1203 `state_dict` entries, and **1203 of 1203 tensors matched the built model element-wise, 0 mismatched** — so the output is attributable to trained weights, not to a silently-random model. Upstream publishes no checksum for either file, so the recorded SHA-256 is a local re-acquisition anchor, not verification against a published value.
+
+The VAE genuinely comes from the PixelHacker weights repository — upstream's own instruction (`README.md:123-146`), not a substitution. Explicitly **not** downloaded: the base `pretrained` checkpoint, `ft_celebahq`, `ft_ffhq`, the PixelHacker teacher weights, and all training datasets.
+
+Note for §5: the yaml's `vae.model_dir` is `./weight/vae`, **CWD-relative**. It only resolves if the process happens to run from the repo root. PixelForge overrides it to an absolute path outside the READ-ONLY tree — a path fix, not a model change. Expect more CWD-relative paths in research repositories.
+
+### Dtype policy — Moebius
+
+float32, and it is **upstream's own inference default**, not a PixelForge conservatism: `pipeline.py`'s signature default is float16, but `infer/utils.py:79` overrides it to `torch.float`. It is also the correct first attempt on MPS under §1's uneven-float16 note. Measured parameter dtypes were `["torch.float32"]` exactly, for both student and VAE. float16 and bfloat16 on MPS remain untested.
+
+### Network reachability
+
+`huggingface.co`, `pypi.org` and `github.com` all returned HTTP `000` from the automated session, while the interactive terminal downloaded both checkpoints successfully. §11 already records network reachability as a **per-session property**; Phase 4 confirms it independently and from both sides. Checkpoint acquisition, like MPS execution, requires the interactive terminal.
