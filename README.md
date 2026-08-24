@@ -4,11 +4,11 @@
 
 PixelForge combines promptable segmentation, generative inpainting, structural and semantic consistency, model adapters and routing, quantitative evaluation, and a web interface into one reproducible research platform.
 
-> ## STATUS: CLEAN REBUILD — PHASE 2 COMPLETE
+> ## STATUS: PHASE 3 COMPLETE — 1 OF 7 MODELS VALIDATED
 >
-> **No model has been installed or executed in this repository. No model weight has been downloaded.**
+> **SAM 2.1 Hiera-Tiny is validated on Apple MPS and classified `LOCAL_MPS`.** Real segmentation inference executed on the Apple M3 Pro GPU from verified trained weights and produced valid non-empty masks — 0.1508 s warm, ~1.2 GiB driver-allocated, no CPU fallback, no modification to the research algorithm. Full record: `docs/experiments/SAM2_MPS_VALIDATION.md`.
 >
-> All seven research repositories have been cloned and pinned to exact commit SHAs (`research/upstream/LOCKFILE.md`). Acquisition is not validation: no dependency environment exists, no checkpoint has been fetched, and every model remains unvalidated and unclassified. Beyond those clones — which are untracked external dependencies — this repository contains directory structure, provenance records, and planning documents. Every capability listed below is **planned**, not working. No claim of working inference exists anywhere in this repository, and none should be added until a real execution on real hardware has been recorded.
+> **The other six models remain unvalidated and unclassified.** All seven research repositories are cloned and pinned to exact commit SHAs (`research/upstream/LOCKFILE.md`), but acquisition is not validation. Every capability listed below is still **planned**, not working: one validated segmentation backend is half of the MVP path, and no inpainting backend has passed its gate yet. No claim of working inference should be added for any component until a real execution on real hardware has been recorded for it.
 >
 > A previous PixelForge working tree was deleted on 2026-08-24 with no git remote and no recoverable history. This rebuild treats provenance and recoverability as prerequisites rather than afterthoughts.
 
@@ -28,7 +28,7 @@ Three commitments shape the design:
 
 ## Planned capabilities
 
-None of the following is implemented yet.
+Nothing below is implemented as a user-facing capability yet. SAM 2 segmentation is validated as a model (Phase 3) but is not wired into any pipeline.
 
 **Selection and masking**
 - Image upload
@@ -117,12 +117,12 @@ The development host is an Apple M3 Pro with 18 GB unified memory and Metal/MPS.
 
 Each model is classified only after evidence, as one of:
 
-| Classification | Meaning |
-|---|---|
-| `LOCAL_MPS` | Validated on Apple Metal on this host |
-| `CLOUD_GPU` | Requires remote CUDA execution |
-| `CPU` | Runs on CPU within acceptable limits |
-| `UNAVAILABLE` | Not viable; failure recorded |
+| Classification | Meaning | Assigned so far |
+|---|---|---|
+| `LOCAL_MPS` | Validated on Apple Metal on this host | **SAM 2.1 Hiera-Tiny** |
+| `CLOUD_GPU` | Requires remote CUDA execution | none |
+| `CPU` | Runs on CPU within acceptable limits | none |
+| `UNAVAILABLE` | Not viable; failure recorded | none |
 
 See `docs/ENVIRONMENT_PLAN.md` for the full hardware and environment strategy.
 
@@ -213,8 +213,8 @@ scripts/          Operational scripts
 |---|---|---|
 | 1 | Project foundation and provenance | Complete |
 | 2 | Acquire and pin research repositories | **Complete** |
-| 3 | Re-establish SAM 2 (first reproducibility gate) | Next |
-| 4 | Moebius feasibility on MPS | Not started |
+| 3 | Re-establish SAM 2 (first reproducibility gate) | **Complete — `PASS`, `LOCAL_MPS`** |
+| 4 | Moebius feasibility on MPS | In progress |
 | 5 | PixelHacker feasibility — local vs cloud | Not started |
 | 6 | Model adapter architecture | Not started |
 | 7 | Core inference pipeline | Not started |
