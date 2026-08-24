@@ -4,11 +4,11 @@
 
 PixelForge combines promptable segmentation, generative inpainting, structural and semantic consistency, model adapters and routing, quantitative evaluation, and a web interface into one reproducible research platform.
 
-> ## STATUS: CLEAN REBUILD — PHASE 1
+> ## STATUS: CLEAN REBUILD — PHASE 2 COMPLETE
 >
-> **No model has been acquired, installed, or executed in this repository.**
+> **No model has been installed or executed in this repository. No model weight has been downloaded.**
 >
-> This repository currently contains directory structure, provenance scaffolding, and planning documents — nothing more. Every capability listed below is **planned**, not working. No claim of working inference exists anywhere in this repository, and none should be added until a real execution on real hardware has been recorded.
+> All seven research repositories have been cloned and pinned to exact commit SHAs (`research/upstream/LOCKFILE.md`). Acquisition is not validation: no dependency environment exists, no checkpoint has been fetched, and every model remains unvalidated and unclassified. Beyond those clones — which are untracked external dependencies — this repository contains directory structure, provenance records, and planning documents. Every capability listed below is **planned**, not working. No claim of working inference exists anywhere in this repository, and none should be added until a real execution on real hardware has been recorded.
 >
 > A previous PixelForge working tree was deleted on 2026-08-24 with no git remote and no recoverable history. This rebuild treats provenance and recoverability as prerequisites rather than afterthoughts.
 
@@ -90,7 +90,7 @@ The frontend never depends on a research repository. Model-specific code never e
 Third-party research repositories live under `research/upstream/` and are **strictly READ-ONLY**.
 
 - PixelForge code never modifies upstream research code.
-- Upstream clones are never committed here — each has its own history and license. Only `research/upstream/REPOSITORIES.md` is tracked.
+- Upstream clones are never committed here — each has its own history and license. Only the provenance registries `research/upstream/REPOSITORIES.md` and `research/upstream/LOCKFILE.md` are tracked.
 - Integration happens exclusively through adapters in `models/adapters/`, which translate between PixelForge's internal contracts and each model's native interface.
 - If a model cannot run in a given environment, the adapter reports it unavailable. The research algorithm is not rewritten to force it.
 
@@ -141,6 +141,8 @@ REPOSITORY AUDIT
 ```
 
 Compatibility is never assumed. Failures are recorded in `research/upstream/REPOSITORIES.md` and `research/RESEARCH_STACK.md` rather than worked around.
+
+Two upstream repositories carry licensing questions that Phase 2 could not resolve from repository files alone and that must be settled before any redistribution or commercial use — see the *Licensing attention required* table in `research/upstream/REPOSITORIES.md`.
 
 ## Evaluation-driven development
 
@@ -209,9 +211,9 @@ scripts/          Operational scripts
 
 | Phase | Scope | State |
 |---|---|---|
-| 1 | Project foundation and provenance | **Current** |
-| 2 | Acquire and pin research repositories | Not started |
-| 3 | Re-establish SAM 2 (first reproducibility gate) | Not started |
+| 1 | Project foundation and provenance | Complete |
+| 2 | Acquire and pin research repositories | **Complete** |
+| 3 | Re-establish SAM 2 (first reproducibility gate) | Next |
 | 4 | Moebius feasibility on MPS | Not started |
 | 5 | PixelHacker feasibility — local vs cloud | Not started |
 | 6 | Model adapter architecture | Not started |

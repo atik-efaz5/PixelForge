@@ -1,8 +1,8 @@
 # Research Stack Plan
 
-STATUS: **PHASE 1 — PLAN ONLY. NO COMPONENT VALIDATED.**
+STATUS: **PHASE 2 — ALL 7 ACQUIRED AND PINNED. NO COMPONENT VALIDATED.**
 
-The seven research components below are **planned**, not integrated. None has been cloned, installed, or executed in this repository. Every `Status` field reads `NOT YET VALIDATED`, and none will change until that component has passed the full validation gate on real hardware.
+All seven research components have been cloned and pinned to exact commit SHAs (see [`research/upstream/LOCKFILE.md`](upstream/LOCKFILE.md)). **Acquisition is not validation.** None has been installed or executed, no dependency environment exists, and no checkpoint has been downloaded. Every `Status` field reads `NOT YET VALIDATED`, and none will change until that component has passed the full validation gate on real hardware.
 
 Provenance (remote, commit SHA, license) is tracked separately and authoritatively in [`research/upstream/REPOSITORIES.md`](upstream/REPOSITORIES.md). This document covers intended role and validation state.
 
@@ -49,6 +49,8 @@ A component that fails is recorded as failed, with the reason, in `REPOSITORIES.
 **Target phase:** Phase 3 — first reproducibility gate for the whole project.
 
 **Notes:** A previous, now-deleted working tree reportedly ran SAM 2.1 Hiera-Tiny on Apple MPS. That tree was destroyed before it could be audited, so the report is **unverified** and is treated as a hypothesis to re-establish, not as prior art. Phase 3 acceptance requires a real inference executing on this machine.
+
+Phase 2 surfaced one favourable piece of evidence: the pinned commit's own subject is an Apple MPS bug fix in `SAM2Base` (upstream #495). That raises the prior that MPS is a supported path upstream. It is **not** a substitute for the Phase 3 measurement.
 
 ## 2. PixelHacker
 
@@ -114,6 +116,8 @@ A component that fails is recorded as failed, with the reason, in `REPOSITORIES.
 
 **Target phase:** Phase 12. Not required for MVP.
 
+**Notes:** Phase 2 recorded two constraints from the repository itself. Its README states the pipeline was *"tested on a GPU with >18GB VRAM"* — at or above this host's **entire** 18 GB unified memory pool, which is also shared with the OS. Its checkpoints derive from Stable Diffusion under **CreativeML Open RAIL-M**, a use-restricted license. Both point toward `CLOUD_GPU`, but neither is a measurement and the classification remains undetermined.
+
 ## 7. Grounded-Segment-Anything
 
 **Purpose:** Open-vocabulary text-guided object grounding (including Grounding DINO) — natural-language selection such as "select the dog". Intended to produce candidate boxes that SAM 2 refines into masks.
@@ -126,7 +130,7 @@ A component that fails is recorded as failed, with the reason, in `REPOSITORIES.
 
 **Target phase:** Phase 11.
 
-**Notes:** Carries git submodules and historically ships CUDA-compiled extensions, so the dependency and device audits are expected to be the most involved of the seven.
+**Notes:** Confirmed at Phase 2: two git submodules are declared (`grounded-sam-osx`, `VISAM`) and both remain **uninitialized** by design. Historically ships CUDA-compiled extensions, so the dependency and device audits are expected to be the most involved of the seven. Upstream also documents a successor project pairing Grounding DINO with SAM 2 directly, which is worth evaluating as an alternative at Phase 11 given PixelForge already standardises on SAM 2.
 
 ---
 
@@ -142,7 +146,7 @@ A component that fails is recorded as failed, with the reason, in `REPOSITORIES.
 | 6 | InstructPix2Pix | Instruction editing | Later | 12 | NOT YET VALIDATED |
 | 7 | Grounded-Segment-Anything | Text-guided grounding | Later | 11 | NOT YET VALIDATED |
 
-**0 of 7 validated. 0 of 7 acquired. 0 of 7 classified.**
+**0 of 7 validated. 7 of 7 acquired and pinned. 0 of 7 classified.**
 
 ## MVP dependency
 

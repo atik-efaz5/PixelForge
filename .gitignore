@@ -61,6 +61,7 @@ models/**/*.bin
 # The provenance registry itself IS tracked.
 research/upstream/*/
 !research/upstream/REPOSITORIES.md
+!research/upstream/LOCKFILE.md
 !research/upstream/.gitkeep
 
 # ---------- Generated data ----------
