@@ -2,7 +2,7 @@
 
 **Machine-verifiable pins for all upstream research repositories.**
 
-Generated: **2026-08-27** (Phase 2 — research repository acquisition + provenance)
+Generated: **2026-08-24** (Phase 2 — research repository acquisition + provenance)
 Location: `/Users/atik/Projects/PixelForge/research/upstream/`
 
 Every SHA in this file was obtained by running `git rev-parse HEAD` inside the actual local clone and was **verified twice**, with both passes producing an identical value. No SHA was inferred from a tag, a release name, a web API, or memory.
@@ -17,13 +17,13 @@ Human-readable context (purpose, license analysis, checkpoint sources, notes): [
 
 | Repository | Directory | Commit SHA | Branch | Acquired at | Working tree |
 |---|---|---|---|---|---|
-| SAM 2 | `sam2` | `2b90b9f5ceec907a1c18123530e92e794ad901a4` | `main` | 2026-08-27T03:19:39+0600 | clean |
-| PixelHacker | `PixelHacker` | `f5567db2871598aa178fe7a34c520dd478a0b41b` | `main` | 2026-08-27T03:19:39+0600 | clean |
-| Moebius | `Moebius` | `b88d462bacb9af6e7128a3b4cc4a07418bedfd61` | `main` | 2026-08-27T03:19:39+0600 | clean |
-| BrushNet | `BrushNet` | `0f9d9e54ca85c40a11a8f0504b4b5b2e7e8fd14d` | `main` | 2026-08-27T03:19:40+0600 | clean |
-| ControlNet | `ControlNet` | `ed85cd1e25a5ed592f7d8178495b4483de0331bf` | `main` | 2026-08-27T03:19:40+0600 | clean |
-| InstructPix2Pix | `instruct-pix2pix` | `0dffd1eeb02611c35088462d1df88714ce2b52f4` | `main` | 2026-08-27T03:19:40+0600 | clean |
-| Grounded-Segment-Anything | `Grounded-Segment-Anything` | `126abe633ffe333e16e4a0a4e946bc1003caf757` | `main` | 2026-08-27T03:19:40+0600 | clean |
+| SAM 2 | `sam2` | `2b90b9f5ceec907a1c18123530e92e794ad901a4` | `main` | 2026-08-24T11:38:50+0600 | clean |
+| PixelHacker | `PixelHacker` | `f5567db2871598aa178fe7a34c520dd478a0b41b` | `main` | 2026-08-24T11:39:47+0600 | clean |
+| Moebius | `Moebius` | `b88d462bacb9af6e7128a3b4cc4a07418bedfd61` | `main` | 2026-08-24T11:41:27+0600 | clean |
+| BrushNet | `BrushNet` | `0f9d9e54ca85c40a11a8f0504b4b5b2e7e8fd14d` | `main` | 2026-08-24T11:42:19+0600 | clean |
+| ControlNet | `ControlNet` | `ed85cd1e25a5ed592f7d8178495b4483de0331bf` | `main` | 2026-08-24T11:42:48+0600 | clean |
+| InstructPix2Pix | `instruct-pix2pix` | `0dffd1eeb02611c35088462d1df88714ce2b52f4` | `main` | 2026-08-24T11:43:50+0600 | clean |
+| Grounded-Segment-Anything | `Grounded-Segment-Anything` | `126abe633ffe333e16e4a0a4e946bc1003caf757` | `main` | 2026-08-24T11:44:00+0600 | clean |
 
 `Acquired at` is the creation time of the clone's `.git` directory on this host, in local time (+0600). It records when the pin was taken locally — not when the upstream commit was authored.
 
@@ -47,7 +47,7 @@ Each clone has exactly one remote, `origin`, with identical fetch and push URLs.
 
 ## Upstream commit metadata
 
-The date and subject of each pinned commit, as recorded in the upstream history.
+The date and subject of each pinned commit, as recorded in the upstream history. Useful for judging how current a pin is without re-cloning.
 
 | Repository | Commit date (upstream) | Subject |
 |---|---|---|
@@ -98,12 +98,12 @@ Documented checkpoint sources per repository are recorded in [`REPOSITORIES.md`]
 | Repository | Total | of which `.git` |
 |---|---|---|
 | Grounded-Segment-Anything | 278 MB | 160 MB |
-| ControlNet | 230 MB | 129 MB |
+| ControlNet | 229 MB | 128 MB |
 | PixelHacker | 223 MB | 192 MB |
 | SAM 2 | 208 MB | 145 MB |
-| Moebius | 165 MB | 112 MB |
+| Moebius | 165 MB | 113 MB |
 | BrushNet | 78 MB | 39 MB |
-| InstructPix2Pix | 37 MB | 18 MB |
+| InstructPix2Pix | 36 MB | 17 MB |
 | **Total** | **1.2 GB** | — |
 
 Entirely source history — no weights, no environments, no build artifacts.
@@ -139,7 +139,7 @@ git -C /Users/atik/Projects/PixelForge/research/upstream/<repo> checkout <SHA-fr
 
 ## Rules governing this file
 
-1. This file is **derived**, never hand-edited with invented SHAs. Regenerate it from the clones.
+1. This file is **derived**, never hand-edited. Regenerate it from the clones.
 2. A SHA is written only after `git rev-parse HEAD` returned it from a real local clone, twice.
 3. Tags and branch names are never authoritative.
 4. Any change to a pin is a **provenance event**: update this file and [`REPOSITORIES.md`](REPOSITORIES.md) in the same commit, and re-run validation for the affected model.

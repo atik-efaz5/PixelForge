@@ -29,14 +29,6 @@ env/
 .env.*
 !.env.example
 
-# ---------- Node / frontend ----------
-node_modules/
-.next/
-out/
-dist/
-.turbo/
-*.tsbuildinfo
-
 # ---------- Model weights and checkpoints ----------
 # Weights are never committed. They are acquired by scripts and
 # recorded in research/upstream/REPOSITORIES.md by source + hash.
@@ -62,14 +54,21 @@ models/**/*.ckpt
 models/**/*.safetensors
 models/**/*.bin
 
-# ---------- Generated outputs ----------
-outputs/
-results/
-runs/
-logs/
-tmp/
-temp/
+# ---------- Upstream research clones ----------
+# Third-party research repositories are external dependencies.
+# They are acquired in Phase 2, treated as READ-ONLY, and never
+# committed here (each carries its own .git and its own license).
+# The provenance registry itself IS tracked.
+research/upstream/*/
+!research/upstream/REPOSITORIES.md
+!research/upstream/LOCKFILE.md
+!research/upstream/.gitkeep
+
+# ---------- Generated data ----------
 uploads/
+outputs/
+artifacts/
+evaluation/reports/generated/
 
 # ---------- Databases ----------
 *.sqlite
@@ -78,22 +77,21 @@ uploads/
 
 # ---------- OS / editor ----------
 .DS_Store
-.AppleDouble
-.LSOverride
 Thumbs.db
-*.swp
-*.swo
-*~
-.idea/
 .vscode/
-*.code-workspace
+.idea/
+*.swp
 
-# ---------- Upstream research clones ----------
-# Third-party research repositories are external dependencies.
-# They are acquired in Phase 2, treated as READ-ONLY, and never
-# committed here (each carries its own .git and its own license).
-#
-# Tracked provenance registries (do NOT ignore):
-#   research/upstream/REPOSITORIES.md
-#   research/upstream/LOCKFILE.md
-research/upstream/*/
+# ---------- Claude Code internal bookkeeping ----------
+.claude/.cc-writes/
+
+# ---------- Node / frontend ----------
+node_modules/
+.next/
+out/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+.pnpm-store/
