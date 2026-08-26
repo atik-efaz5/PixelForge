@@ -1,0 +1,45 @@
+# PixelForge model adapter configuration (Phase 6).
+#
+# Paths are relative to the project root and may be overridden by environment
+# variables. Do not put machine-specific absolute paths in this file.
+#
+# Overrides:
+#   PIXELFORGE_ROOT
+#   PIXELFORGE_SAM2_CHECKPOINT
+#   PIXELFORGE_MOEBIUS_CHECKPOINT
+#   PIXELFORGE_MOEBIUS_VAE
+#   PIXELFORGE_PIXELHACKER_ENDPOINT
+
+models:
+  sam2:
+    model_id: sam2.1_hiera_tiny
+    display_name: SAM 2.1 Hiera-Tiny
+    backend: LOCAL_MPS
+    enabled: true
+    environment: pixelforge-sam2-v2
+    checkpoint: checkpoints/sam2/sam2.1_hiera_tiny.pt
+    config_file: configs/sam2.1/sam2.1_hiera_t.yaml
+    upstream_dir: research/upstream/sam2
+
+  moebius:
+    model_id: moebius_ft_places2
+    display_name: Moebius
+    backend: LOCAL_MPS
+    enabled: true
+    environment: pixelforge-moebius
+    checkpoint: checkpoints/moebius/ft_places2/diffusion_pytorch_model.bin
+    vae_dir: checkpoints/moebius/vae
+    config_file: config/model_cfg/moebius.yaml
+    upstream_dir: research/upstream/Moebius
+
+  pixelhacker:
+    model_id: pixelhacker_ft_places2
+    display_name: PixelHacker
+    backend: CLOUD_GPU
+    enabled: true
+    environment: pixelforge-pixelhacker
+    checkpoint: checkpoints/pixelhacker/ft_places2/diffusion_pytorch_model.bin
+    vae_dir: checkpoints/pixelhacker/vae
+    upstream_dir: research/upstream/PixelHacker
+    # Empty until a cloud worker exists. Set PIXELFORGE_PIXELHACKER_ENDPOINT.
+    endpoint: ""
