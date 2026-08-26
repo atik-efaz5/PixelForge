@@ -1,8 +1,8 @@
 # Research Stack Plan
 
-STATUS: **2 OF 7 VALIDATED — SAM 2 PASSED ITS GATE (`LOCAL_MPS` / `PASS`) AND MOEBIUS PASSED ITS GATE (`LOCAL_MPS` / `CONDITIONAL`).**
+STATUS: **2 OF 7 RUNTIME-VALIDATED — SAM 2 (`LOCAL_MPS` / `PASS`) AND MOEBIUS (`LOCAL_MPS` / `CONDITIONAL`). PIXELHACKER IS CLASSIFIED `CLOUD_GPU` (`LOCAL_MPS: FAIL`) BUT NOT RUNTIME-VALIDATED.**
 
-All seven research components have been cloned and pinned to exact commit SHAs (see [`research/upstream/LOCKFILE.md`](upstream/LOCKFILE.md)). **Acquisition is not validation.** Phase 3 ran the SAM 2 gate on real hardware and returned `PASS`: real segmentation inference executed on the Apple M3 Pro GPU via MPS. SAM 2 is therefore `VALIDATED` / `LOCAL_MPS`. Phase 4 has now taken Moebius through the full gate and returned `CONDITIONAL`: real generative inpainting executed on the same GPU, all 11 checks passed, but student inference on Apple Silicon requires a documented PixelForge-side import-isolation workaround that does not alter the research method. Moebius is therefore `VALIDATED (CONDITIONAL)` / `LOCAL_MPS`. The remaining five `Status` fields still read `NOT YET VALIDATED`, and none will change until that component has passed the full validation gate on real hardware.
+All seven research components have been cloned and pinned to exact commit SHAs (see [`research/upstream/LOCKFILE.md`](upstream/LOCKFILE.md)). **Acquisition is not validation.** Phase 3 ran the SAM 2 gate on real hardware and returned `PASS`: real segmentation inference executed on the Apple M3 Pro GPU via MPS. SAM 2 is therefore `VALIDATED` / `LOCAL_MPS`. Phase 4 has now taken Moebius through the full gate and returned `CONDITIONAL`: real generative inpainting executed on the same GPU, all 11 checks passed, but student inference on Apple Silicon requires a documented PixelForge-side import-isolation workaround that does not alter the research method. Moebius is therefore `VALIDATED (CONDITIONAL)` / `LOCAL_MPS`. Phase 5 classified PixelHacker from the pinned source **without** a runtime gate: `LOCAL_MPS` is `FAIL`; primary placement is `CLOUD_GPU`, **not yet runtime-validated**. The remaining four `Status` fields still read `NOT YET VALIDATED`.
 
 Provenance (remote, commit SHA, license) is tracked separately and authoritatively in [`research/upstream/REPOSITORIES.md`](upstream/REPOSITORIES.md). This document covers intended role and validation state.
 
@@ -10,7 +10,7 @@ Provenance (remote, commit SHA, license) is tracked separately and authoritative
 
 ## No compatibility is claimed beyond what has been measured
 
-Only SAM 2 and Moebius have been measured. For the other five components, nothing here asserts that they run on this host, in any configuration.
+Only SAM 2 and Moebius have been **runtime-measured**. PixelHacker has been **source-classified** (Phase 5) but has produced no image on any device in this project. For BrushNet, ControlNet, InstructPix2Pix, and Grounded-SAM, nothing here asserts that they run on this host, in any configuration.
 
 - `Execution` is `TBD` where no dependency or device audit has been performed.
 - `Local/cloud` is `TBD — NOT YET DETERMINED` because placement is an empirical outcome, not a design decision. Assigning it before measurement would be a guess.
@@ -77,17 +77,43 @@ Full record: [`docs/experiments/SAM2_MPS_VALIDATION.md`](../docs/experiments/SAM
 
 ## 2. PixelHacker
 
-**Purpose:** Generative inpainting. Project namesake and candidate inpainting backend (**Priority B**).
+**Purpose:** Generative inpainting. Project namesake and candidate inpainting backend (**Priority B**). Cloud-capable second backend; **not** the local MVP inpainting path (that is Moebius).
 
-**Execution:** TBD
+**Execution:** NVIDIA CUDA is the documented inference device. **Not executed in this project.**
 
-**Local/cloud:** TBD — NOT YET DETERMINED
+**Local/cloud:** **`CLOUD_GPU`**
 
-**Status:** **NOT YET VALIDATED**
+**Status:** **CLASSIFIED — 2026-08-27. NOT RUNTIME-VALIDATED.**
 
-**Target phase:** Phase 5.
+| Gate | Verdict |
+|---|---|
+| LOCAL_MPS | **FAIL** |
+| CLOUD_GPU | **CONDITIONAL / NOT YET RUNTIME-VALIDATED** |
+| CPU | not a practical PixelForge target (not benchmarked) |
 
-**Notes:** Phase 5 must determine whether a local path exists at all. Acceptance is *either* a verified local path *or* a verified cloud-GPU path — both are acceptable outcomes; an unverified assumption is not. A surviving Hugging Face cache entry records a weights-repo revision for `hustvl/PixelHacker`, which is **not** the upstream GitHub commit and is recorded separately in `REPOSITORIES.md`.
+**Target phase:** Phase 5. **Classification complete.** Adapter and cloud worker are **not** started.
+
+**Notes:** Phase 5 answered whether a local path exists: **it does not**, unless the GLA UNet is rewritten. Acceptance of a *verified* cloud-GPU path remains open — source-feasible, never run.
+
+### Classified facts (Phase 5, 2026-08-27)
+
+| Property | Value |
+|---|---|
+| Commit | `f5567db2871598aa178fe7a34c520dd478a0b41b` (verified twice; tree clean) |
+| Architecture | `UNet2DConditionModel` with **GLA replacing `attn1`** in every cross-attention block (`inject_gla_into_tf2dmodel`) |
+| Blocking dependency | `flash-linear-attention` (`fla.ops.gla`) imported at `gla_model/gla.py:16` |
+| Official device | `cuda:0` if CUDA else `cpu` — **no MPS path** |
+| `flash-attn` | in `requirements.txt`, **not imported** by inference sources |
+| Moebius isolation reusable? | **No** — GLA is the PixelHacker model, not a skippable teacher |
+| `strict=False` | **unacceptable** — can leave randomly initialised GLA modules |
+| Min checkpoints (not downloaded) | `ft_places2` UNet 3 449 345 440 B + VAE 167 394 306 B + `vae/config.json` |
+| Weight license (HF) | **MIT**; GitHub **code** license Apache-2.0 |
+| Environment | **not created** |
+| Mask contract | PIL RGB + `'L'` mask, WHITE = inpaint; SAM 2 boolean → uint8 is a straightforward adapter conversion |
+
+No cloud latency, no VRAM measurement, no successful PixelHacker image.
+
+Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](../docs/experiments/PIXELHACKER_FEASIBILITY.md).
 
 ## 3. Moebius
 
@@ -198,14 +224,14 @@ Full record: [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](../docs/experiments/
 | # | Component | Intended role | Priority | Target phase | Status |
 |---|---|---|---|---|---|
 | 1 | SAM 2 | Segmentation | Core / MVP | 3 | **VALIDATED — `LOCAL_MPS`** |
-| 2 | PixelHacker | Inpainting | B | 5 | NOT YET VALIDATED |
+| 2 | PixelHacker | Inpainting | B | 5 | **CLASSIFIED `CLOUD_GPU` — `LOCAL_MPS: FAIL`; not runtime-validated** |
 | 3 | Moebius | Inpainting | A | 4 | **VALIDATED (`CONDITIONAL`) — `LOCAL_MPS`** |
 | 4 | BrushNet | Inpainting | C | contingent | NOT YET VALIDATED |
 | 5 | ControlNet | Structural conditioning | Later | 12 | NOT YET VALIDATED |
 | 6 | InstructPix2Pix | Instruction editing | Later | 12 | NOT YET VALIDATED |
 | 7 | Grounded-Segment-Anything | Text-guided grounding | Later | 11 | NOT YET VALIDATED |
 
-**2 of 7 validated. 7 of 7 acquired and pinned. 2 of 7 classified.**
+**2 of 7 runtime-validated. 3 of 7 classified. 7 of 7 acquired and pinned.**
 
 ## MVP dependency
 
@@ -217,11 +243,12 @@ UPLOAD → CLICK → SAM 2 SEGMENTATION → EDITABLE MASK
     → BEFORE / MASK / AFTER → PERFORMANCE METADATA
 ```
 
-**Both are now validated: SAM 2 (Phase 3, `PASS`) and Moebius (Phase 4, `CONDITIONAL`).** Moebius is a viable candidate for the local MVP inpainting backend, subject to preserving the documented import-isolation strategy. The remaining four components are explicitly **not** MVP blockers and must not be started before the MVP path works end to end.
+**Both MVP backends are now runtime-validated: SAM 2 (Phase 3, `PASS`) and Moebius (Phase 4, `CONDITIONAL`).** Moebius is the local inpainting backend, subject to preserving the documented import-isolation strategy. PixelHacker (Phase 5) is a **cloud-classified** second backend (`CLOUD_GPU`, `LOCAL_MPS: FAIL`) and is **not** an MVP blocker. The remaining four components are explicitly **not** MVP blockers and must not be started before the MVP path works end to end.
 
 Two constraints the MVP design must carry:
 
-- **The import isolation is load-bearing.** Any adapter that imports `model_lib` before installing the surrogate will fail on `fla`. This must be preserved at Phase 6, not rediscovered.
+- **The import isolation is load-bearing for Moebius.** Any adapter that imports `model_lib` before installing the surrogate will fail on `fla`. This must be preserved at Phase 6, not rediscovered. It does **not** make PixelHacker runnable on MPS: PixelHacker’s forward pass *is* `fla` GLA.
 - **Latency is dominated by inpainting, not segmentation.** SAM 2 warm is 0.1508 s; Moebius warm is 21.9121 s — roughly **145×** more. The end-to-end warm path is therefore ~22 s, essentially all of it Moebius, and pre-warming does not help (cold/warm ratio 1.0×). Step count at ~1.10 s/step is the only obvious lever, and its quality cost is unmeasured.
+- **PixelHacker is not wired and not run.** A future `PixelHackerAdapter` should expose availability, backend type `CLOUD_GPU`, metadata, image/mask I/O, parameters, output, latency, memory, and backend status, and hide CUDA/cloud details. It is **not implemented**.
 
-Neither component has been integrated yet: the SAM 2 → Moebius handoff has been verified only at the level of the mask contract (RGB + `'L'` mask, WHITE = inpaint), not end to end with a real SAM 2 mask. That is the Phase 6 integration test.
+Neither SAM 2 nor Moebius has been integrated yet: the SAM 2 → Moebius handoff has been verified only at the level of the mask contract (RGB + `'L'` mask, WHITE = inpaint), not end to end with a real SAM 2 mask. The same mask conversion applies to PixelHacker (Phase 5 source audit). That integration test remains Phase 6 for the **local** path.

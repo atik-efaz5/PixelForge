@@ -1,12 +1,14 @@
 # Environment Plan
 
-STATUS: **PHASE 4 COMPLETE — TWO VALIDATED ENVIRONMENTS OF RECORD: `pixelforge-sam2-v2` (SAM 2, `PASS`) AND `pixelforge-moebius` (MOEBIUS, `CONDITIONAL`).**
+STATUS: **PHASE 5 COMPLETE AS A SOURCE CLASSIFICATION — NO PIXELHACKER ENVIRONMENT CREATED. TWO VALIDATED ENVIRONMENTS OF RECORD REMAIN: `pixelforge-sam2-v2` (SAM 2, `PASS`) AND `pixelforge-moebius` (MOEBIUS, `CONDITIONAL`). PIXELHACKER IS `CLOUD_GPU` / `LOCAL_MPS: FAIL` / NOT RUNTIME-VALIDATED.**
 
 The first isolated environment has been created and validated: **`pixelforge-sam2-v2`** (Python 3.11.15, torch 2.13.0), in which SAM 2.1 Hiera-Tiny executed real segmentation inference on Apple MPS. A pre-existing environment named `pixelforge-sam2` — no `-v2` — was found on the host, audited, and **disqualified**: it is bound to the deleted project tree. Details in §11 and in [`docs/experiments/SAM2_MPS_VALIDATION.md`](experiments/SAM2_MPS_VALIDATION.md).
 
 A second environment, **`pixelforge-moebius`**, has been created for Phase 4, passes the same editable-install audit, and has now **executed real generative inpainting on MPS** — verdict **`CONDITIONAL`**, all 11 gate checks passed. It is `CONDITIONAL` rather than `PASS` because student inference on Apple Silicon requires a PixelForge-side import-isolation workaround that does **not** alter the research method. Details in §12 and in [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](experiments/MOEBIUS_MPS_VALIDATION.md).
 
-Sections 1–10 describe the rules that govern environment creation. Sections 11–12 record what was actually measured, per model.
+Phase 5 classified PixelHacker from the pinned source. **No third environment was created, no PixelHacker UNet weights were downloaded, and no cloud GPU was deployed.** Placement is `CLOUD_GPU`; `LOCAL_MPS` is `FAIL`. Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](experiments/PIXELHACKER_FEASIBILITY.md) and §13.
+
+Sections 1–10 describe the rules that govern environment creation. Sections 11–12 record what was actually measured, per model. Section 13 records a **source classification**, not a runtime measurement.
 
 ---
 
@@ -121,11 +123,12 @@ If a model cannot run locally without altering its algorithm, the correct outcom
 
 ### Cloud GPU
 
-Cloud execution is deferred until a model actually requires it (anticipated at Phase 5 for PixelHacker). When it arrives:
+Cloud execution is deferred until a model actually requires it. **Phase 5 established that PixelHacker requires it** (`LOCAL_MPS: FAIL`; primary classification `CLOUD_GPU`). The worker itself is **not deployed**. When it arrives:
 
 - Provider and instance type recorded alongside the same version facts as local environments
 - Credentials via environment variables only — never committed
 - The same adapter contract, so the pipeline cannot tell the difference
+- No latency or VRAM figure from a cloud run is to be invented in the meantime — see §13 / the feasibility doc for estimated vs unvalidated items
 
 ## 8. Phase-by-phase environment schedule
 
@@ -135,7 +138,7 @@ Cloud execution is deferred until a model actually requires it (anticipated at P
 | 2 | None. Clone and pin repositories only. | None | Done |
 | 3 | Create isolated SAM 2 environment; verify MPS | SAM 2.1 Hiera-Tiny only | **DONE** — `pixelforge-sam2-v2` created, checkpoint acquired (148.78 MiB), MPS inference validated `PASS` (§11) |
 | 4 | Create isolated Moebius environment | Moebius `ft_places2` student + SD VAE only | **DONE** — `pixelforge-moebius` created and audited; both checkpoints downloaded; real MPS inference executed; verdict **`CONDITIONAL`**, 11/11 checks passed (§12) |
-| 5 | Create PixelHacker environment, local or cloud per audit | Minimal PixelHacker inference checkpoint | Not started |
+| 5 | Classify PixelHacker placement from pinned source; **do not** create an env or download UNet weights until a runtime gate is scheduled | None this phase (VAE already present from Phase 4; PixelHacker UNet **not** downloaded) | **DONE as classification** — `CLOUD_GPU`, `LOCAL_MPS: FAIL`, not runtime-validated (§13) |
 | 6+ | Reuse validated environments; add only as needed | As validated | Not started |
 
 ## 9. Known open questions
@@ -145,7 +148,7 @@ Unresolved, to be answered by measurement rather than assumption:
 1. Does PyTorch MPS work for the operator sets these models require? (Phase 3 onward, per model.) — **ANSWERED FOR SAM 2: yes.** The full SAM 2.1 Hiera-Tiny image-inference operator set executed on MPS with no fallback and no error, producing correct masks. This is a per-model answer and does not generalize to the other six.
 2. What is the maximum inpainting resolution that fits in 18 GB, per backend? (Phase 4 onward.)
 3. Can a segmentation model and an inpainting model be co-resident, or must the pipeline serialize `load()`/`unload()`? (Phase 7.) — **BOTH INPUTS NOW MEASURED, ANSWER LIKELY YES:** SAM 2.1 Hiera-Tiny holds 1205.92 MiB driver-allocated and Moebius holds 4498.22 MiB, against a 12288.02 MiB recommended ceiling. Their sum is 5704.14 MiB — **46.4 %** of the ceiling — so co-residency at 512×512 appears feasible with ~6.4 GiB spare. **Not yet demonstrated:** the two have never been resident in one process simultaneously, and Apple's unified pool means the figures are not guaranteed to add linearly. Phase 7 must measure it directly.
-4. Does PixelHacker have a viable non-CUDA inference path? (Phase 5.)
+4. Does PixelHacker have a viable non-CUDA inference path? (Phase 5.) — **ANSWERED: no viable MPS path without changing the architecture.** GLA is injected into PixelHacker UNet self-attention and imports `fla` at module load; `fla`/Triton are not installable on this host (Phase 4 measurement). Official entry point is `cuda:0` else `cpu`, with no MPS branch. CPU is a device-string fallback, not a practical PixelForge target, and was not benchmarked. Primary classification **`CLOUD_GPU`**, runtime **NOT VALIDATED**. Details: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](experiments/PIXELHACKER_FEASIBILITY.md).
 5. Which upstream commit of each repository is compatible with a modern Python 3.12 / arm64 toolchain? (Phase 2–3.) — **ANSWERED FOR SAM 2:** the pinned commit runs correctly under Python **3.11.15** with torch 2.13.0 / torchvision 0.28.0 / numpy 2.4.6 on arm64, satisfying all 7 lower-bound-only requirements.
 6. Is Metal reachable from the execution contexts this project actually runs in? (New, raised by Phase 3.) — **ANSWERED: it depends on the context, and both outcomes were observed on this one host.** An interactive session reached Metal and ran the inference; a non-interactive session got `MTLCreateSystemDefaultDevice()` → NULL. Hardware capability, PyTorch MPS support, and per-process Metal reachability are three separable facts, and every device audit must record all three.
 
@@ -322,7 +325,7 @@ Resolved **without modifying upstream**, by seeding `sys.modules['model_lib']` w
 
 **This workaround is load-bearing and must be preserved into the adapter layer at Phase 6.** Any code path that imports `model_lib` before the surrogate is installed will pull the teacher and fail on `fla`. It is the sole reason the verdict is `CONDITIONAL` rather than `PASS`, and it cannot be discharged — it is a permanent property of this commit on this platform.
 
-This is a general lesson for the remaining five components, not a Moebius quirk: **a research repository's `__init__.py` may couple components that are logically independent.** The dependency audit must trace the actual import graph, not the requirements file. Expect the same pattern at Phase 5 (PixelHacker is the teacher here) and at Phase 11 (Grounded-SAM ships CUDA-compiled extensions).
+This is a general lesson for the remaining components, not a Moebius quirk: **a research repository's `__init__.py` may couple components that are logically independent.** The dependency audit must trace the actual import graph, not the requirements file. Phase 5 confirmed the **inverse** of the Moebius case: in PixelHacker, GLA is not a skippable teacher import — it **is** the UNet. The same `fla` package that Moebius isolates away is on PixelHacker’s real inference path, which is why isolation cannot be reused and why placement is `CLOUD_GPU`. Grounded-SAM (Phase 11) still ships CUDA-compiled extensions and remains a separate audit.
 
 ### Device audit — the per-process condition, now observed from both sides
 
@@ -385,3 +388,44 @@ float32, and it is **upstream's own inference default**, not a PixelForge conser
 ### Network reachability
 
 `huggingface.co`, `pypi.org` and `github.com` all returned HTTP `000` from the automated session, while the interactive terminal downloaded both checkpoints successfully. §11 already records network reachability as a **per-session property**; Phase 4 confirms it independently and from both sides. Checkpoint acquisition, like MPS execution, requires the interactive terminal.
+
+---
+
+## 13. Classified facts (Phase 5, 2026-08-27) — PixelHacker
+
+Phase 5 is **complete as a source classification**, not as a runtime gate. **No environment of record exists for PixelHacker.** Nothing in this section is a latency or VRAM measurement from a PixelHacker process.
+
+Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](experiments/PIXELHACKER_FEASIBILITY.md).
+
+| Property | Value |
+|---|---|
+| Commit | `f5567db2871598aa178fe7a34c520dd478a0b41b` (verified twice; working tree clean) |
+| Primary classification | **`CLOUD_GPU`** |
+| LOCAL_MPS | **FAIL** |
+| CLOUD_GPU runtime | **CONDITIONAL / NOT YET RUNTIME-VALIDATED** |
+| CPU as PixelForge target | rejected (device-string fallback only; not benchmarked) |
+| Environment created | **No** |
+| Dependencies installed | **No** |
+| UNet weights downloaded | **No** |
+| Cloud worker deployed | **No** |
+| Adapter implemented | **No** |
+
+### Why LOCAL_MPS fails (source, plus one prior measurement)
+
+PixelHacker’s UNet **is** Gated Linear Attention: `inject_gla_into_tf2dmodel` replaces `tfblock.attn1` in every cross-attention down / mid / up block. `gla_model/gla.py` imports `fla.ops.gla` at module load. That is the research architecture, not an optional teacher.
+
+The Moebius import surrogate **cannot** be reused: skipping GLA here removes PixelHacker, whereas skipping GLA there only skipped a teacher that the student does not run. `load_state_dict(..., strict=False)` is forbidden — it can leave Xavier-initialised GLA modules in the forward pass (`PixelHacker.initialize_weights` runs after injection).
+
+Phase 4 already **measured** that `flash-linear-attention` / Triton are not installable on this M3 Pro. The official PixelHacker entry point is `cuda:0` if CUDA else `cpu`; there is no MPS branch.
+
+`flash-attn==2.5.8` is in `requirements.txt` and is **not imported** by the inference `*.py` files. It is not the MPS blocker.
+
+### Environment action reserved, not executed
+
+When a runtime gate is scheduled, create **`pixelforge-pixelhacker`** as a new isolated environment (Python 3.10 per upstream README, `torch==2.3.0` CUDA wheel, `flash-linear-attention==0.3.2`). Do not merge it with `pixelforge-moebius` (diffusers 0.30.2 vs 0.40.0; torch 2.3.0 vs 2.13.0).
+
+Minimum checkpoint set (HF sizes, **not downloaded**): `ft_places2/diffusion_pytorch_model.bin` (3 449 345 440 B) + `vae/config.json` + `vae/diffusion_pytorch_model.bin` (167 394 306 B). The VAE bytes match the Phase 4 local VAE file; that file does not substitute for the missing UNet.
+
+Reasonable first cloud GPU: **16 GB VRAM minimum, 24 GB preferred** — **ESTIMATED**, not measured. No cloud latency is recorded.
+
+Weight license on Hugging Face is **MIT**; GitHub code license is **Apache-2.0**. Record both; do not assume they are the same as Moebius (Apache-2.0 on code **and** weights).
