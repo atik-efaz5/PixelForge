@@ -1,0 +1,251 @@
+"""Core image-editing pipeline over standardized adapters.
+
+Workflow: image → segmentation → mask refinement → inpainting → result.
+
+This module imports adapters only through the registry (or injected fakes in
+tests). It never imports ``research.upstream``.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from collections.abc import Callable
+from typing import Any
+
+import numpy as np
+
+from models.adapters.base import InpaintingAdapter, ModelAdapter, SegmentationAdapter
+from models.errors import ModelInferenceError, ModelLoadError, ModelUnavailableError
+from models.registry import get_adapter
+from models.types import (
+    BackendType,
+    ImageArray,
+    InpaintParams,
+    InpaintingResult,
+    MaskArray,
+    SegmentationResult,
+    validate_image,
+    validate_mask,
+)
+from pipelines.errors import PipelineBackendError, PipelineValidationError
+from pipelines.mask_refinement import refine_mask, require_non_empty_mask
+from pipelines.types import ImageEditPipelineResult, MaskRefinementOps, PipelineLatency
+
+logger = logging.getLogger(__name__)
+
+SUPPORTED_INPAINT_BACKENDS = frozenset({"moebius", "pixelhacker"})
+
+
+class ImageEditPipeline:
+    """SAM 2 segmentation + adapter inpainting behind one application API."""
+
+    def __init__(
+        self,
+        *,
+        segmentation_provider: Callable[[], SegmentationAdapter] | None = None,
+        inpaint_provider: Callable[[str], InpaintingAdapter] | None = None,
+        unload_between_stages: bool = True,
+    ) -> None:
+        self._segmentation_provider = segmentation_provider or (
+            lambda: get_adapter("sam2")  # type: ignore[return-value]
+        )
+        self._inpaint_provider = inpaint_provider or (
+            lambda name: get_adapter(name)  # type: ignore[return-value]
+        )
+        self._unload_between_stages = unload_between_stages
+
+    def segment(self, image: np.ndarray, x: int, y: int) -> SegmentationResult:
+        """Point-prompted segmentation via the configured segmentation adapter."""
+        image = validate_image(image)
+        self._validate_point(image, x, y)
+        adapter = self._segmentation_provider()
+        self._require_segmentation_adapter(adapter)
+        if not adapter.is_available():
+            raise ModelUnavailableError(
+                f"{adapter.model_name} is not available in this environment."
+            )
+        logger.info(
+            "segment_start model=%s point=(%d,%d) shape=%s",
+            adapter.model_name,
+            x,
+            y,
+            image.shape,
+        )
+        t0 = time.perf_counter()
+        try:
+            self._prepare_local_adapter(adapter)
+            result = adapter.infer(image, x, y)
+        except (ModelLoadError, ModelInferenceError, ModelUnavailableError):
+            raise
+        except Exception as exc:
+            raise ModelInferenceError("Segmentation failed.") from exc
+        finally:
+            if self._unload_between_stages:
+                self._release_local_adapter(adapter)
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        if not bool(result.mask.any()):
+            raise ModelInferenceError("Segmentation produced an empty mask.")
+        result.metadata.setdefault("pipeline_latency_ms", round(elapsed_ms, 3))
+        logger.info(
+            "segment_done model=%s latency_ms=%.3f area=%d",
+            result.model,
+            elapsed_ms,
+            int(result.mask.sum()),
+        )
+        return result
+
+    def refine_mask(
+        self,
+        mask: np.ndarray,
+        image: np.ndarray,
+        operations: MaskRefinementOps | None = None,
+        **kwargs: Any,
+    ) -> MaskArray:
+        """Apply lightweight boolean mask edits. Dimensions must match ``image``."""
+        image = validate_image(image)
+        return refine_mask(mask, image, operations, **kwargs)
+
+    def inpaint(
+        self,
+        image: np.ndarray,
+        mask: np.ndarray,
+        backend: str = "moebius",
+        params: InpaintParams | None = None,
+    ) -> InpaintingResult:
+        """Inpaint ``mask`` (True = generate) using the requested backend."""
+        image = validate_image(image)
+        mask = require_non_empty_mask(validate_mask(mask, image=image), stage="inpaint")
+        adapter = self._resolve_inpaint_adapter(backend)
+        if not adapter.is_available():
+            raise ModelUnavailableError(
+                f"{adapter.model_name} ({backend}) is not available."
+            )
+        logger.info(
+            "inpaint_start model=%s backend=%s mask_area=%d shape=%s",
+            adapter.model_name,
+            adapter.backend_type.value,
+            int(mask.sum()),
+            image.shape,
+        )
+        t0 = time.perf_counter()
+        try:
+            self._prepare_local_adapter(adapter)
+            result = adapter.infer(image, mask, params)
+        except (ModelLoadError, ModelInferenceError, ModelUnavailableError):
+            raise
+        except Exception as exc:
+            raise ModelInferenceError("Inpainting failed.") from exc
+        finally:
+            if self._unload_between_stages:
+                self._release_local_adapter(adapter)
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        if result.latency_ms is None or result.latency_ms == 0:
+            result.metadata.setdefault("pipeline_latency_ms", round(elapsed_ms, 3))
+        logger.info(
+            "inpaint_done model=%s latency_ms=%.3f adapter_ms=%s",
+            result.model,
+            elapsed_ms,
+            result.latency_ms,
+        )
+        return result
+
+    def remove_object(
+        self,
+        image: np.ndarray,
+        x: int,
+        y: int,
+        *,
+        backend: str = "moebius",
+        refinement: MaskRefinementOps | None = None,
+        params: InpaintParams | None = None,
+    ) -> ImageEditPipelineResult:
+        """Full workflow: segment → refine → inpaint."""
+        image = validate_image(image)
+        total_t0 = time.perf_counter()
+
+        segmentation = self.segment(image, x, y)
+        mask = segmentation.mask
+        if refinement is not None:
+            mask = self.refine_mask(mask, image, refinement)
+        mask = require_non_empty_mask(mask, stage="refinement")
+
+        inpainting = self.inpaint(image, mask, backend=backend, params=params)
+        total_ms = (time.perf_counter() - total_t0) * 1000.0
+
+        seg_ms = segmentation.metadata.get("pipeline_latency_ms") or segmentation.metadata.get(
+            "latency_ms"
+        )
+        inpaint_ms = inpainting.latency_ms or inpainting.metadata.get("pipeline_latency_ms")
+
+        return ImageEditPipelineResult(
+            result=inpainting.result,
+            mask=mask,
+            segmentation=segmentation,
+            inpainting=inpainting,
+            selected_model=inpainting.model,
+            backend=inpainting.backend,
+            latency=PipelineLatency(
+                segmentation_ms=float(seg_ms) if seg_ms is not None else None,
+                inpainting_ms=float(inpaint_ms) if inpaint_ms is not None else None,
+                total_ms=round(total_ms, 3),
+            ),
+            metadata={
+                "prompt_xy": [int(x), int(y)],
+                "segmentation_model": segmentation.model,
+                "inpaint_backend": backend,
+            },
+        )
+
+    def _resolve_inpaint_adapter(self, backend: str) -> InpaintingAdapter:
+        key = backend.strip().lower()
+        if key not in SUPPORTED_INPAINT_BACKENDS:
+            raise PipelineBackendError(
+                f"Unsupported inpainting backend '{backend}'. "
+                f"Supported: {', '.join(sorted(SUPPORTED_INPAINT_BACKENDS))}."
+            )
+        adapter = self._inpaint_provider(key)
+        self._require_inpainting_adapter(adapter)
+        return adapter
+
+    @staticmethod
+    def _validate_point(image: np.ndarray, x: int, y: int) -> None:
+        h, w = image.shape[:2]
+        if not isinstance(x, int) or not isinstance(y, int):
+            raise PipelineValidationError("Point coordinates must be integers.")
+        if not (0 <= x < w and 0 <= y < h):
+            raise PipelineValidationError(
+                f"Point ({x}, {y}) is outside the image bounds ({w}×{h})."
+            )
+
+    @staticmethod
+    def _require_segmentation_adapter(adapter: ModelAdapter) -> SegmentationAdapter:
+        if not isinstance(adapter, SegmentationAdapter):
+            raise PipelineValidationError("Configured segmentation adapter is invalid.")
+        return adapter
+
+    @staticmethod
+    def _require_inpainting_adapter(adapter: ModelAdapter) -> InpaintingAdapter:
+        if not isinstance(adapter, InpaintingAdapter):
+            raise PipelineValidationError("Configured inpainting adapter is invalid.")
+        return adapter
+
+    @staticmethod
+    def _prepare_local_adapter(adapter: ModelAdapter) -> None:
+        if adapter.backend_type != BackendType.LOCAL_MPS:
+            if not adapter.is_loaded:
+                adapter.load()
+            return
+        other = ModelAdapter._local_resident
+        if other is not None and other is not adapter and other.is_loaded:
+            logger.debug("unload_other model=%s", other.model_name)
+            other.unload()
+        if not adapter.is_loaded:
+            adapter.load()
+
+    @staticmethod
+    def _release_local_adapter(adapter: ModelAdapter) -> None:
+        if adapter.is_loaded:
+            adapter.unload()
