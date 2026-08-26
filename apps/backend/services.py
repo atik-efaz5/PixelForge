@@ -12,6 +12,8 @@ from fastapi import UploadFile
 from PIL import Image
 
 from apps.backend.errors import InvalidInputError
+from apps.backend.isolated_runner import inpaint_via_isolated_env
+from models.errors import ModelLoadError
 from models.registry import get_adapter, known_models
 from models.types import (
     BackendType,
@@ -78,7 +80,13 @@ class ImageEditingService:
         params: InpaintParams | None = None,
     ) -> InpaintingResult:
         logger.info("service_inpaint backend=%s", backend)
-        return self._pipeline.inpaint(image, mask, backend=backend, params=params)
+        try:
+            return self._pipeline.inpaint(image, mask, backend=backend, params=params)
+        except ModelLoadError as exc:
+            if backend.strip().lower() != "moebius":
+                raise
+            logger.warning("in-process Moebius load failed; using isolated env: %s", exc)
+            return inpaint_via_isolated_env(image, mask, params=params)
 
     def remove_object(
         self,
