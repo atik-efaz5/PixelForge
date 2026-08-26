@@ -1,0 +1,99 @@
+# ============================================================
+# PixelForge — .gitignore
+# Phase 1 foundation. Authored BEFORE any research code or
+# model weights are acquired, so nothing large or unlicensed
+# can enter history by accident.
+# ============================================================
+
+# ---------- Python ----------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ---------- Virtual environments ----------
+# Per-model isolated environments live outside Git.
+.venv/
+venv/
+env/
+.conda/
+
+# ---------- Secrets ----------
+# Never commit credentials. Use environment variables.
+.env
+.env.*
+!.env.example
+
+# ---------- Node / frontend ----------
+node_modules/
+.next/
+out/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# ---------- Model weights and checkpoints ----------
+# Weights are never committed. They are acquired by scripts and
+# recorded in research/upstream/REPOSITORIES.md by source + hash.
+#
+# NOTE: a bare `models/` ignore is deliberately NOT used here.
+# models/adapters/ holds first-party adapter SOURCE CODE that
+# must stay tracked. Weight artifacts are excluded by extension
+# and by weight-specific subdirectory instead.
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+*.h5
+weights/
+weight/
+checkpoints/
+models/weights/
+models/**/*.pt
+models/**/*.pth
+models/**/*.ckpt
+models/**/*.safetensors
+models/**/*.bin
+
+# ---------- Generated outputs ----------
+outputs/
+results/
+runs/
+logs/
+tmp/
+temp/
+uploads/
+
+# ---------- Databases ----------
+*.sqlite
+*.sqlite3
+*.db
+
+# ---------- OS / editor ----------
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# ---------- Upstream research clones ----------
+# Third-party research repositories are external dependencies.
+# They are acquired in Phase 2, treated as READ-ONLY, and never
+# committed here (each carries its own .git and its own license).
+#
+# Tracked provenance registries (do NOT ignore):
+#   research/upstream/REPOSITORIES.md
+#   research/upstream/LOCKFILE.md
+research/upstream/*/
