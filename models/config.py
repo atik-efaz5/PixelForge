@@ -93,6 +93,17 @@ _DEFAULTS: dict[str, dict[str, Any]] = {
         "upstream_dir": "research/upstream/PixelHacker",
         "endpoint": "",
     },
+    "instruct_pix2pix": {
+        "model_id": "instruct_pix2pix_00_22000",
+        "display_name": "InstructPix2Pix",
+        "backend": "CLOUD_GPU",
+        "enabled": True,
+        "environment": "pixelforge-instruct-pix2pix",
+        "checkpoint": "checkpoints/instruct_pix2pix/instruct-pix2pix-00-22000.ckpt",
+        "config_file": "configs/generate.yaml",
+        "upstream_dir": "research/upstream/instruct-pix2pix",
+        "endpoint": "",
+    },
     "grounding_dino": {
         "model_id": "groundingdino_swint_ogc",
         "display_name": "Grounding DINO SwinT OGC",

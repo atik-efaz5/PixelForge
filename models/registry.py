@@ -18,6 +18,7 @@ def _factories() -> dict[str, Callable[[], ModelAdapter]]:
     global _FACTORIES
     if _FACTORIES is None:
         from models.adapters.grounding_dino_adapter import GroundingDINOAdapter
+        from models.adapters.instruct_pix2pix_adapter import InstructPix2PixAdapter
         from models.adapters.moebius_adapter import MoebiusAdapter
         from models.adapters.pixelhacker_adapter import PixelHackerAdapter
         from models.adapters.sam2_adapter import SAM2Adapter
@@ -26,6 +27,7 @@ def _factories() -> dict[str, Callable[[], ModelAdapter]]:
             "sam2": SAM2Adapter,
             "moebius": MoebiusAdapter,
             "pixelhacker": PixelHackerAdapter,
+            "instruct_pix2pix": InstructPix2PixAdapter,
             "grounding_dino": GroundingDINOAdapter,
         }
     return _FACTORIES

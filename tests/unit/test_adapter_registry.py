@@ -33,13 +33,15 @@ class TestAdapterRegistry(unittest.TestCase):
 
     def test_known_models(self) -> None:
         self.assertEqual(
-            known_models(), ("sam2", "moebius", "pixelhacker", "grounding_dino")
+            known_models(),
+            ("sam2", "moebius", "pixelhacker", "instruct_pix2pix", "grounding_dino"),
         )
 
     def test_registry_lookup(self) -> None:
         sam2 = get_adapter("sam2")
         moebius = get_adapter("moebius")
         pixelhacker = get_adapter("pixelhacker")
+        instruct = get_adapter("instruct_pix2pix")
         grounding_dino = get_adapter("grounding_dino")
         self.assertEqual(sam2.model_name, "SAM 2.1 Hiera-Tiny")
         self.assertIs(sam2.backend_type, BackendType.LOCAL_MPS)
@@ -47,6 +49,8 @@ class TestAdapterRegistry(unittest.TestCase):
         self.assertIs(moebius.backend_type, BackendType.LOCAL_MPS)
         self.assertEqual(pixelhacker.model_name, "PixelHacker")
         self.assertIs(pixelhacker.backend_type, BackendType.CLOUD_GPU)
+        self.assertEqual(instruct.model_name, "InstructPix2Pix")
+        self.assertIs(instruct.backend_type, BackendType.CLOUD_GPU)
         self.assertEqual(grounding_dino.model_name, "Grounding DINO SwinT OGC")
         self.assertIs(grounding_dino.backend_type, BackendType.CPU)
 
@@ -61,6 +65,7 @@ class TestAdapterRegistry(unittest.TestCase):
         get_adapter("sam2")
         get_adapter("moebius")
         get_adapter("pixelhacker")
+        get_adapter("instruct_pix2pix")
         get_adapter("grounding_dino")
         leaked = [
             name

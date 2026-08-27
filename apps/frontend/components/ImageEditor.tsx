@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { inpaint, segment, selectByText } from "@/lib/api";
+import { editByInstruction, inpaint, segment, selectByText } from "@/lib/api";
 import {
   createEmptyMask,
   decodeMaskPng,
@@ -38,6 +38,7 @@ export function ImageEditor() {
   const [brushRadius, setBrushRadius] = useState(24);
   const [backend] = useState<InpaintBackend>("moebius");
   const [textPrompt, setTextPrompt] = useState("");
+  const [editInstruction, setEditInstruction] = useState("");
   const [detections, setDetections] = useState<DetectionInfo[]>([]);
   const [detectionIndex, setDetectionIndex] = useState(0);
   const [status, setStatus] = useState<EditorStatus>("idle");
@@ -73,6 +74,7 @@ export function ImageEditor() {
       setError(null);
       setTool("select");
       setTextPrompt("");
+      setEditInstruction("");
       setDetections([]);
       setDetectionIndex(0);
     },
@@ -233,6 +235,30 @@ export function ImageEditor() {
     }
   }, [backend, busy, imageFile, imageSize, resultUrl]);
 
+  const handleApplyInstruction = useCallback(async () => {
+    if (!imageFile || busy) return;
+    const instruction = editInstruction.trim();
+    if (!instruction) {
+      setError("Enter an instruction to apply.");
+      return;
+    }
+    setStatus("instruction_editing");
+    setError(null);
+    try {
+      const { blob, metadata } = await editByInstruction(imageFile, instruction);
+      revokeIfObjectUrl(resultUrl);
+      const url = URL.createObjectURL(blob);
+      setResultUrl(url);
+      setLatencyMs(metadata.latency_ms ?? null);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Instruction editing failed.";
+      setError(message);
+    } finally {
+      setStatus("idle");
+    }
+  }, [busy, editInstruction, imageFile, resultUrl]);
+
   useEffect(() => {
     return () => {
       revokeIfObjectUrl(imageUrl);
@@ -300,7 +326,9 @@ export function ImageEditor() {
                 ? "Segmenting…"
                 : status === "grounding"
                   ? "Finding object…"
-                  : "Generating result…"}
+                  : status === "instruction_editing"
+                    ? "Applying instruction…"
+                    : "Generating result…"}
             </div>
           ) : null}
 
@@ -340,6 +368,10 @@ export function ImageEditor() {
           onTextPromptChange={setTextPrompt}
           onFindObject={handleFindObject}
           onDetectionIndexChange={handleDetectionIndexChange}
+          editInstruction={editInstruction}
+          canApplyInstruction={Boolean(imageFile && editInstruction.trim())}
+          onEditInstructionChange={setEditInstruction}
+          onApplyInstruction={handleApplyInstruction}
         />
       </div>
     </div>

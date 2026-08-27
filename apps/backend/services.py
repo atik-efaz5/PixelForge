@@ -19,6 +19,8 @@ from models.types import (
     BackendType,
     InpaintParams,
     InpaintingResult,
+    InstructionEditParams,
+    InstructionEditResult,
     SegmentationResult,
     TextSelectionResult,
     pil_rgb_to_array,
@@ -59,6 +61,8 @@ class ImageEditingService:
                 role = "segmentation"
             elif model_id == "grounding_dino":
                 role = "grounding"
+            elif model_id == "instruct_pix2pix":
+                role = "instruction_editing"
             else:
                 role = "inpainting"
             entries.append(
@@ -75,16 +79,20 @@ class ImageEditingService:
         return entries
 
     def list_editing_capabilities(self) -> list[dict[str, Any]]:
-        """Declare which edit intents each inpainting backend actually supports."""
+        """Declare which edit intents each editing backend actually supports."""
         rows: list[dict[str, Any]] = []
+        intent_values = lambda cap: {i.value for i in cap.supported_intents}
         for backend_id, cap in BACKEND_EDIT_CAPABILITIES.items():
+            intents = intent_values(cap)
             rows.append(
                 {
                     "backend_id": backend_id,
-                    "localized_inpaint": EditIntent.LOCALIZED_INPAINT.value
-                    in {i.value for i in cap.supported_intents},
-                    "semantic_replace": EditIntent.SEMANTIC_REPLACE.value
-                    in {i.value for i in cap.supported_intents},
+                    "localized_inpaint": EditIntent.LOCALIZED_INPAINT.value in intents,
+                    "semantic_replace": EditIntent.SEMANTIC_REPLACE.value in intents,
+                    "global_instruction_edit": EditIntent.GLOBAL_INSTRUCTION_EDIT.value
+                    in intents,
+                    "mask_conditioned_edit": EditIntent.MASK_CONDITIONED_EDIT.value
+                    in intents,
                     "accepts_text_instruction": cap.accepts_text_instruction,
                     "accepts_reference_image": cap.accepts_reference_image,
                     "notes": cap.notes,
@@ -113,6 +121,20 @@ class ImageEditingService:
                 "in-process Moebius load failed; using isolated env: %s", exc
             )
             return inpaint_via_isolated_env(image, mask, params=params)
+
+    def edit_by_instruction(
+        self,
+        image: np.ndarray,
+        instruction: str,
+        *,
+        backend: str = "instruct_pix2pix",
+        params: InstructionEditParams | None = None,
+    ) -> InstructionEditResult:
+        """Global instruction edit via the configured cloud adapter."""
+        logger.info("service_edit_by_instruction backend=%s", backend)
+        return self._pipeline.edit_by_instruction(
+            image, instruction, backend=backend, params=params
+        )
 
     def segment(self, image: np.ndarray, x: int, y: int) -> SegmentationResult:
         logger.info("service_segment x=%d y=%d", x, y)
@@ -281,6 +303,24 @@ def parse_inpaint_params(
     if all(value is None for value in fields.values()):
         return None
     return InpaintParams(**fields)
+
+
+def parse_instruction_edit_params(
+    *,
+    num_steps: int | None = None,
+    guidance_text: float | None = None,
+    guidance_image: float | None = None,
+    resolution: int | None = None,
+) -> InstructionEditParams | None:
+    fields = {
+        "num_steps": num_steps,
+        "guidance_text": guidance_text,
+        "guidance_image": guidance_image,
+        "resolution": resolution,
+    }
+    if all(value is None for value in fields.values()):
+        return None
+    return InstructionEditParams(**fields)
 
 
 def segmentation_backend() -> str:

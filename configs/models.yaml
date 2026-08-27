@@ -9,6 +9,7 @@
 #   PIXELFORGE_MOEBIUS_CHECKPOINT
 #   PIXELFORGE_MOEBIUS_VAE
 #   PIXELFORGE_PIXELHACKER_ENDPOINT
+#   PIXELFORGE_INSTRUCT_PIX2PIX_ENDPOINT
 #   PIXELFORGE_GROUNDING_DINO_CHECKPOINT
 
 models:
@@ -43,6 +44,18 @@ models:
     vae_dir: checkpoints/pixelhacker/vae
     upstream_dir: research/upstream/PixelHacker
     # Empty until a cloud worker exists. Set PIXELFORGE_PIXELHACKER_ENDPOINT.
+    endpoint: ""
+
+  instruct_pix2pix:
+    model_id: instruct_pix2pix_00_22000
+    display_name: InstructPix2Pix
+    backend: CLOUD_GPU
+    enabled: true
+    environment: pixelforge-instruct-pix2pix
+    checkpoint: checkpoints/instruct_pix2pix/instruct-pix2pix-00-22000.ckpt
+    config_file: configs/generate.yaml
+    upstream_dir: research/upstream/instruct-pix2pix
+    # Empty until a cloud worker exists. Set PIXELFORGE_INSTRUCT_PIX2PIX_ENDPOINT.
     endpoint: ""
 
   grounding_dino:

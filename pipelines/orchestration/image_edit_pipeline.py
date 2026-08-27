@@ -15,7 +15,13 @@ from typing import Any
 
 import numpy as np
 
-from models.adapters.base import GroundingAdapter, InpaintingAdapter, ModelAdapter, SegmentationAdapter
+from models.adapters.base import (
+    GroundingAdapter,
+    InpaintingAdapter,
+    InstructionEditAdapter,
+    ModelAdapter,
+    SegmentationAdapter,
+)
 from models.errors import ModelInferenceError, ModelLoadError, ModelUnavailableError
 from models.registry import get_adapter
 from models.types import (
@@ -23,6 +29,8 @@ from models.types import (
     ImageArray,
     InpaintParams,
     InpaintingResult,
+    InstructionEditParams,
+    InstructionEditResult,
     GroundingResult,
     MaskArray,
     SegmentationResult,
@@ -37,12 +45,17 @@ from pipelines.errors import (
     UnsupportedEditIntentError,
 )
 from pipelines.mask_refinement import refine_mask, require_non_empty_mask
-from pipelines.editing_capabilities import EditIntent, localized_edit_supported
+from pipelines.editing_capabilities import (
+    EditIntent,
+    global_instruction_edit_supported,
+    localized_edit_supported,
+)
 from pipelines.types import ImageEditPipelineResult, MaskRefinementOps, PipelineLatency
 
 logger = logging.getLogger(__name__)
 
 SUPPORTED_INPAINT_BACKENDS = frozenset({"moebius", "pixelhacker"})
+SUPPORTED_INSTRUCTION_EDIT_BACKENDS = frozenset({"instruct_pix2pix"})
 SUPPORTED_GROUNDING_BACKENDS = frozenset({"grounding_dino"})
 
 
@@ -54,6 +67,7 @@ class ImageEditPipeline:
         *,
         segmentation_provider: Callable[[], SegmentationAdapter] | None = None,
         inpaint_provider: Callable[[str], InpaintingAdapter] | None = None,
+        instruction_edit_provider: Callable[[str], InstructionEditAdapter] | None = None,
         grounding_provider: Callable[[str], GroundingAdapter] | None = None,
         unload_between_stages: bool = True,
     ) -> None:
@@ -61,6 +75,9 @@ class ImageEditPipeline:
             lambda: get_adapter("sam2")  # type: ignore[return-value]
         )
         self._inpaint_provider = inpaint_provider or (
+            lambda name: get_adapter(name)  # type: ignore[return-value]
+        )
+        self._instruction_edit_provider = instruction_edit_provider or (
             lambda name: get_adapter(name)  # type: ignore[return-value]
         )
         self._grounding_provider = grounding_provider or (
@@ -246,6 +263,57 @@ class ImageEditPipeline:
         )
         return self.inpaint(image, mask, backend=backend, params=params)
 
+    def edit_by_instruction(
+        self,
+        image: np.ndarray,
+        instruction: str,
+        *,
+        backend: str = "instruct_pix2pix",
+        params: InstructionEditParams | None = None,
+        mask: np.ndarray | None = None,
+    ) -> InstructionEditResult:
+        """Global instruction edit on the full image. Masks are not supported."""
+        if mask is not None:
+            raise UnsupportedEditIntentError(
+                f"Backend '{backend}' does not support mask-conditioned editing."
+            )
+        if not global_instruction_edit_supported(backend):
+            raise PipelineBackendError(
+                f"Backend '{backend}' does not support global instruction editing."
+            )
+        image = validate_image(image)
+        prompt = self._validate_text_prompt(instruction)
+        adapter = self._resolve_instruction_edit_adapter(backend)
+        if not adapter.is_available():
+            raise ModelUnavailableError(
+                f"{adapter.model_name} ({backend}) is not available."
+            )
+        logger.info(
+            "edit_by_instruction_start backend=%s intent=%s instruction_len=%d",
+            backend,
+            EditIntent.GLOBAL_INSTRUCTION_EDIT.value,
+            len(prompt),
+        )
+        t0 = time.perf_counter()
+        try:
+            if not adapter.is_loaded:
+                adapter.load()
+            result = adapter.infer(image, prompt, params)
+        except (ModelLoadError, ModelInferenceError, ModelUnavailableError):
+            raise
+        except Exception as exc:
+            raise ModelInferenceError("Instruction editing failed.") from exc
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        if result.latency_ms is None or result.latency_ms == 0:
+            result.metadata.setdefault("pipeline_latency_ms", round(elapsed_ms, 3))
+        logger.info(
+            "edit_by_instruction_done model=%s latency_ms=%.3f",
+            result.model,
+            elapsed_ms,
+        )
+        return result
+
     def remove_object(
         self,
         image: np.ndarray,
@@ -369,6 +437,17 @@ class ImageEditPipeline:
         self._require_inpainting_adapter(adapter)
         return adapter
 
+    def _resolve_instruction_edit_adapter(self, backend: str) -> InstructionEditAdapter:
+        key = backend.strip().lower()
+        if key not in SUPPORTED_INSTRUCTION_EDIT_BACKENDS:
+            raise PipelineBackendError(
+                f"Unsupported instruction-edit backend '{backend}'. "
+                f"Supported: {', '.join(sorted(SUPPORTED_INSTRUCTION_EDIT_BACKENDS))}."
+            )
+        adapter = self._instruction_edit_provider(key)
+        self._require_instruction_edit_adapter(adapter)
+        return adapter
+
     @staticmethod
     def _validate_text_prompt(text_prompt: str) -> str:
         prompt = text_prompt.strip()
@@ -402,6 +481,14 @@ class ImageEditPipeline:
     def _require_inpainting_adapter(adapter: ModelAdapter) -> InpaintingAdapter:
         if not isinstance(adapter, InpaintingAdapter):
             raise PipelineValidationError("Configured inpainting adapter is invalid.")
+        return adapter
+
+    @staticmethod
+    def _require_instruction_edit_adapter(adapter: ModelAdapter) -> InstructionEditAdapter:
+        if not isinstance(adapter, InstructionEditAdapter):
+            raise PipelineValidationError(
+                "Configured instruction-edit adapter is invalid."
+            )
         return adapter
 
     @staticmethod

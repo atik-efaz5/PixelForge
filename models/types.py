@@ -170,3 +170,29 @@ class InpaintingResult:
 
     def __post_init__(self) -> None:
         self.result = validate_image(self.result)
+
+
+@dataclass
+class InstructionEditParams:
+    """Optional global instruction-edit knobs. ``None`` fields use adapter defaults."""
+
+    num_steps: int | None = None
+    guidance_text: float | None = None
+    guidance_image: float | None = None
+    resolution: int | None = None
+
+
+@dataclass
+class InstructionEditResult:
+    """Standard output of a global instruction-editing adapter."""
+
+    result: ImageArray
+    latency_ms: float
+    memory_mb: float | None
+    model: str
+    backend: BackendType
+    instruction: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.result = validate_image(self.result)

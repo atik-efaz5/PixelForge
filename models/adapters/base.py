@@ -120,3 +120,11 @@ class InpaintingAdapter(ModelAdapter):
     @abstractmethod
     def infer(self, image, mask, params=None, /):
         """Inpaint ``mask`` (True = generate) on ``image``."""
+
+
+class InstructionEditAdapter(ModelAdapter):
+    """Adapter that edits a full RGB image from a natural-language instruction."""
+
+    @abstractmethod
+    def infer(self, image, instruction: str, params=None, /):
+        """Apply a global instruction edit to ``image``."""

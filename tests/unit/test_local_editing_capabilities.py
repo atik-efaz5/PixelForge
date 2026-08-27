@@ -139,6 +139,8 @@ class TestEditingCapabilitiesService(unittest.TestCase):
             backend_id="moebius",
             localized_inpaint=True,
             semantic_replace=False,
+            global_instruction_edit=False,
+            mask_conditioned_edit=True,
             accepts_text_instruction=False,
             accepts_reference_image=False,
             notes="mask only",

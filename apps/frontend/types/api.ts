@@ -40,6 +40,15 @@ export interface InpaintMetadata {
   metadata: Record<string, unknown>;
 }
 
+export interface EditByInstructionMetadata {
+  model: string;
+  backend: string;
+  instruction: string;
+  latency_ms: number;
+  memory_mb: number | null;
+  metadata: Record<string, unknown>;
+}
+
 export interface RemoveObjectMetadata {
   model: string;
   backend: string;
@@ -87,7 +96,12 @@ export type InpaintBackend = "moebius";
 
 export type EditorTool = "select" | "brush" | "erase";
 
-export type EditorStatus = "idle" | "segmenting" | "grounding" | "generating";
+export type EditorStatus =
+  | "idle"
+  | "segmenting"
+  | "grounding"
+  | "generating"
+  | "instruction_editing";
 
 export interface ImageDimensions {
   width: number;

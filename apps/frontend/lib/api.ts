@@ -1,5 +1,6 @@
 import type {
   ApiErrorBody,
+  EditByInstructionMetadata,
   HealthResponse,
   InpaintBackend,
   InpaintMetadata,
@@ -209,6 +210,31 @@ export async function removeObject(
     "latency_ms",
     "segmentation_ms",
     "inpainting_ms",
+    "metadata",
+  ]);
+}
+
+export async function editByInstruction(
+  image: File,
+  instruction: string,
+  backend = "instruct_pix2pix"
+): Promise<PngWithMetadata<EditByInstructionMetadata>> {
+  const form = new FormData();
+  form.append("image", image, image.name || "image.png");
+  form.append("instruction", instruction);
+  form.append("backend", backend);
+
+  const response = await fetch(`${apiBaseUrl()}/edit-by-instruction`, {
+    method: "POST",
+    body: form,
+  });
+
+  return readPngResponse<EditByInstructionMetadata>(response, [
+    "model",
+    "backend",
+    "instruction",
+    "latency_ms",
+    "memory_mb",
     "metadata",
   ]);
 }

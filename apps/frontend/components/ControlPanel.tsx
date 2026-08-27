@@ -19,6 +19,10 @@ interface ControlPanelProps {
   onTextPromptChange: (value: string) => void;
   onFindObject: () => void;
   onDetectionIndexChange: (index: number) => void;
+  editInstruction: string;
+  canApplyInstruction: boolean;
+  onEditInstructionChange: (value: string) => void;
+  onApplyInstruction: () => void;
 }
 
 export function ControlPanel({
@@ -38,6 +42,10 @@ export function ControlPanel({
   onTextPromptChange,
   onFindObject,
   onDetectionIndexChange,
+  editInstruction,
+  canApplyInstruction,
+  onEditInstructionChange,
+  onApplyInstruction,
 }: ControlPanelProps) {
   return (
     <aside
@@ -179,7 +187,40 @@ export function ControlPanel({
       </section>
 
       <section>
-        <h2 style={sectionTitleStyle}>Actions</h2>
+        <h2 style={sectionTitleStyle}>Instruction Edit</h2>
+        <label style={labelStyle}>
+          Instruction
+          <textarea
+            value={editInstruction}
+            disabled={busy}
+            placeholder="Make the sky look like sunset"
+            rows={3}
+            onChange={(event) => onEditInstructionChange(event.target.value)}
+            style={{
+              width: "100%",
+              marginTop: 6,
+              padding: "8px 10px",
+              resize: "vertical",
+              fontFamily: "inherit",
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy || !canApplyInstruction}
+          onClick={onApplyInstruction}
+          style={{ ...secondaryButtonStyle, marginTop: 8, fontWeight: 600 }}
+        >
+          {busy ? "Applying…" : "Apply Instruction"}
+        </button>
+        <p style={hintStyle}>
+          Global full-frame edit via InstructPix2Pix (cloud). Does not use the mask
+          from selection above.
+        </p>
+      </section>
+
+      <section>
+        <h2 style={sectionTitleStyle}>Localized Fill</h2>
         <button
           type="button"
           disabled={busy || !canGenerate}

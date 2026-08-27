@@ -75,11 +75,13 @@ class SelectByTextMetadata(BaseModel):
 
 
 class EditingCapabilityEntry(BaseModel):
-    """Declared edit intents for one inpainting backend."""
+    """Declared edit intents for one editing backend."""
 
     backend_id: str
     localized_inpaint: bool
     semantic_replace: bool
+    global_instruction_edit: bool
+    mask_conditioned_edit: bool
     accepts_text_instruction: bool
     accepts_reference_image: bool
     notes: str
@@ -89,3 +91,14 @@ class EditingCapabilitiesResponse(BaseModel):
     """JSON response for ``GET /capabilities``."""
 
     capabilities: list[EditingCapabilityEntry]
+
+
+class EditByInstructionMetadata(BaseModel):
+    """JSON metadata for ``POST /edit-by-instruction``. Result pixels are returned as PNG."""
+
+    model: str
+    backend: str
+    instruction: str
+    latency_ms: float
+    memory_mb: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)

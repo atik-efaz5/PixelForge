@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, Response
 from apps.backend.dependencies import configure_cors, get_editing_service
 from apps.backend.errors import register_exception_handlers
 from apps.backend.schemas import (
+    EditByInstructionMetadata,
     EditingCapabilitiesResponse,
     EditingCapabilityEntry,
     HealthResponse,
@@ -29,6 +30,7 @@ from apps.backend.services import (
     image_to_png_bytes,
     mask_to_png_bytes,
     parse_inpaint_params,
+    parse_instruction_edit_params,
     png_response_headers,
     segmentation_backend,
 )
@@ -73,6 +75,49 @@ def build_router():
                 EditingCapabilityEntry(**entry)
                 for entry in service.list_editing_capabilities()
             ]
+        )
+
+    @router.post("/edit-by-instruction")
+    async def edit_by_instruction(
+        service: Annotated[ImageEditingService, Depends(get_editing_service)],
+        image: UploadFile = File(..., description="RGB image."),
+        instruction: str = Form(
+            ...,
+            description="Global edit instruction, e.g. make the sky look like sunset.",
+        ),
+        backend: str = Form("instruct_pix2pix"),
+        num_steps: int | None = Form(None),
+        guidance_text: float | None = Form(None),
+        guidance_image: float | None = Form(None),
+        resolution: int | None = Form(None),
+    ) -> Response:
+        rgb = await decode_upload_image(image)
+        params = parse_instruction_edit_params(
+            num_steps=num_steps,
+            guidance_text=guidance_text,
+            guidance_image=guidance_image,
+            resolution=resolution,
+        )
+        result = service.edit_by_instruction(
+            rgb,
+            instruction,
+            backend=backend,
+            params=params,
+        )
+        meta = EditByInstructionMetadata(
+            model=result.model,
+            backend=backend_label(result.backend),
+            instruction=result.instruction,
+            latency_ms=result.latency_ms,
+            memory_mb=result.memory_mb,
+            metadata=result.metadata,
+        )
+        headers = png_response_headers(meta.model_dump())
+        headers["Content-Disposition"] = 'inline; filename="edit.png"'
+        return Response(
+            content=image_to_png_bytes(result.result),
+            media_type="image/png",
+            headers=headers,
         )
 
     @router.post("/segment")
