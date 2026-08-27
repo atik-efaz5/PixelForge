@@ -1,6 +1,11 @@
 "use client";
 
 import type { EditorTool, ImageDimensions } from "@/types/api";
+import {
+  resetInteractionState,
+  shouldPaintStroke,
+  shouldTriggerPointSelect,
+} from "@/lib/canvasPointer";
 import { pointerToImageCoords } from "@/lib/coordinates";
 import {
   computeViewLayout,
@@ -32,6 +37,13 @@ interface EditorCanvasProps {
   onStrokeEnd: () => void;
 }
 
+type PointerHud = {
+  screenX: number;
+  screenY: number;
+  imageX: number;
+  imageY: number;
+};
+
 export function EditorCanvas({
   imageUrl,
   imageSize,
@@ -59,15 +71,40 @@ export function EditorCanvas({
   const strokeStartedRef = useRef(false);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
   const spaceDownRef = useRef(false);
-  const [pointerPos, setPointerPos] = useState<{
-    screenX: number;
-    screenY: number;
-    imageX: number;
-    imageY: number;
-  } | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const pointerPosRef = useRef<PointerHud | null>(null);
+  const viewportRef = useRef(viewport);
+  const redrawRef = useRef<() => void>(() => {});
+  const [pointerHud, setPointerHud] = useState<PointerHud | null>(null);
   const [isPanning, setIsPanning] = useState(false);
 
+  viewportRef.current = viewport;
+
   const activeRadius = tool === "erase" ? eraserRadius : brushRadius;
+
+  const releasePointerCapture = useCallback(() => {
+    const canvas = canvasRef.current;
+    const pointerId = activePointerIdRef.current;
+    if (canvas && pointerId !== null && canvas.hasPointerCapture(pointerId)) {
+      canvas.releasePointerCapture(pointerId);
+    }
+    activePointerIdRef.current = null;
+  }, []);
+
+  const endInteraction = useCallback(
+    (options?: { endStroke?: boolean }) => {
+      if (options?.endStroke && paintingRef.current && strokeStartedRef.current) {
+        onStrokeEnd();
+      }
+      const idle = resetInteractionState();
+      panningRef.current = idle.isPanning;
+      paintingRef.current = idle.isPainting;
+      strokeStartedRef.current = idle.strokeStarted;
+      setIsPanning(false);
+      releasePointerCapture();
+    },
+    [onStrokeEnd, releasePointerCapture]
+  );
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -76,27 +113,36 @@ export function EditorCanvas({
     if (!canvas || !container || !imageSize) return;
 
     const rect = container.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(rect.width * dpr);
-    canvas.height = Math.floor(rect.height * dpr);
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
+    const cssWidth = rect.width;
+    const cssHeight = rect.height;
+    const pixelWidth = Math.floor(cssWidth * dpr);
+    const pixelHeight = Math.floor(cssHeight * dpr);
+
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+      canvas.style.width = `${cssWidth}px`;
+      canvas.style.height = `${cssHeight}px`;
+    }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
 
     const layout = computeViewLayout(
-      { width: rect.width, height: rect.height },
+      { width: cssWidth, height: cssHeight },
       imageSize,
-      viewport
+      viewportRef.current
     );
     layoutRef.current = layout;
 
     if (showMaskOnly && mask) {
       ctx.fillStyle = "#0f1115";
-      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.fillRect(0, 0, cssWidth, cssHeight);
       const preview = document.createElement("canvas");
       preview.width = imageSize.width;
       preview.height = imageSize.height;
@@ -135,6 +181,7 @@ export function EditorCanvas({
       }
     }
 
+    const pointerPos = pointerPosRef.current;
     if (
       pointerPos &&
       (tool === "brush" || tool === "erase") &&
@@ -157,12 +204,12 @@ export function EditorCanvas({
     featherRadius,
     imageSize,
     mask,
-    pointerPos,
     showMaskOnly,
     showOverlay,
     tool,
-    viewport,
   ]);
+
+  redrawRef.current = redraw;
 
   useEffect(() => {
     if (!imageUrl) {
@@ -178,13 +225,13 @@ export function EditorCanvas({
     const img = new Image();
     img.onload = () => {
       imageRef.current = img;
-      redraw();
+      redrawRef.current();
     };
     img.src = imageUrl;
     return () => {
       img.onload = null;
     };
-  }, [imageUrl, redraw]);
+  }, [imageUrl]);
 
   useEffect(() => {
     redraw();
@@ -198,22 +245,31 @@ export function EditorCanvas({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.code === "Space") {
+      if (event.code === "Space" && !event.repeat) {
         spaceDownRef.current = true;
       }
     };
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code === "Space") {
         spaceDownRef.current = false;
+        if (panningRef.current) {
+          endInteraction();
+        }
       }
+    };
+    const onBlur = () => {
+      spaceDownRef.current = false;
+      endInteraction({ endStroke: true });
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
     };
-  }, []);
+  }, [endInteraction]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -227,7 +283,7 @@ export function EditorCanvas({
       const factor = event.deltaY > 0 ? 1 / 1.12 : 1.12;
       onViewportChange(
         zoomViewportAtPoint(
-          viewport,
+          viewportRef.current,
           factor,
           event.clientX - rect.left,
           event.clientY - rect.top,
@@ -240,64 +296,80 @@ export function EditorCanvas({
 
     container.addEventListener("wheel", onWheel, { passive: false });
     return () => container.removeEventListener("wheel", onWheel);
-  }, [imageSize, onViewportChange, viewport]);
+  }, [imageSize, onViewportChange]);
 
-  const handlePointer = useCallback(
-    (clientX: number, clientY: number, isStroke: boolean) => {
+  const updatePointerHud = useCallback(
+    (clientX: number, clientY: number) => {
       const canvas = canvasRef.current;
       const layout = layoutRef.current;
-      if (!canvas || !layout || disabled || !imageSize) return;
+      if (!canvas || !layout || !imageSize) {
+        pointerPosRef.current = null;
+        setPointerHud(null);
+        return null;
+      }
 
       const rect = canvas.getBoundingClientRect();
       const localX = clientX - rect.left;
       const localY = clientY - rect.top;
       const coords = pointerToImageCoords(localX, localY, layout, imageSize);
-      if (coords) {
-        setPointerPos({
-          screenX: localX,
-          screenY: localY,
-          imageX: coords.x,
-          imageY: coords.y,
-        });
-      } else {
-        setPointerPos(null);
+      if (!coords) {
+        pointerPosRef.current = null;
+        setPointerHud(null);
+        return null;
       }
-      if (!coords) return;
 
-      if (tool === "select" && !isStroke) {
-        onPointSelect(coords.x, coords.y);
-      } else if (tool === "brush" || tool === "erase") {
-        onBrushStroke(coords.x, coords.y, tool === "brush" ? "brush" : "erase");
-      }
+      const hud: PointerHud = {
+        screenX: localX,
+        screenY: localY,
+        imageX: coords.x,
+        imageY: coords.y,
+      };
+      pointerPosRef.current = hud;
+      setPointerHud(hud);
+      return coords;
     },
-    [disabled, imageSize, onBrushStroke, onPointSelect, tool]
+    [imageSize]
   );
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!imageUrl || disabled) return;
+    if (event.button !== 0 && event.button !== 1) return;
+
     const isMiddle = event.button === 1;
     const isPan = isMiddle || spaceDownRef.current;
     if (isPan) {
+      event.preventDefault();
       panningRef.current = true;
       setIsPanning(true);
       panStartRef.current = {
         x: event.clientX,
         y: event.clientY,
-        panX: viewport.panX,
-        panY: viewport.panY,
+        panX: viewportRef.current.panX,
+        panY: viewportRef.current.panY,
       };
+      activePointerIdRef.current = event.pointerId;
       event.currentTarget.setPointerCapture(event.pointerId);
       return;
     }
 
-    paintingRef.current = true;
-    strokeStartedRef.current = false;
+    activePointerIdRef.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
+
+    const coords = updatePointerHud(event.clientX, event.clientY);
+    if (!coords) return;
+
+    if (shouldTriggerPointSelect(tool, "down")) {
+      onPointSelect(coords.x, coords.y);
+      return;
+    }
+
     if (tool === "brush" || tool === "erase") {
+      paintingRef.current = true;
+      strokeStartedRef.current = false;
       onStrokeStart();
       strokeStartedRef.current = true;
+      onBrushStroke(coords.x, coords.y, tool === "brush" ? "brush" : "erase");
     }
-    handlePointer(event.clientX, event.clientY, tool !== "select");
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -305,40 +377,43 @@ export function EditorCanvas({
       const dx = event.clientX - panStartRef.current.x;
       const dy = event.clientY - panStartRef.current.y;
       onViewportChange({
-        ...viewport,
+        ...viewportRef.current,
         panX: panStartRef.current.panX + dx,
         panY: panStartRef.current.panY + dy,
       });
       return;
     }
-    handlePointer(event.clientX, event.clientY, paintingRef.current && tool !== "select");
+
+    const coords = updatePointerHud(event.clientX, event.clientY);
+    if (tool === "brush" || tool === "erase") {
+      redraw();
+    }
+
+    if (!coords || !shouldPaintStroke(tool, paintingRef.current)) {
+      return;
+    }
+    onBrushStroke(coords.x, coords.y, tool === "brush" ? "brush" : "erase");
   };
 
   const onPointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (panningRef.current) {
-      panningRef.current = false;
-      setIsPanning(false);
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (activePointerIdRef.current !== null && event.pointerId !== activePointerIdRef.current) {
       return;
     }
-    if (paintingRef.current && strokeStartedRef.current) {
-      onStrokeEnd();
+    endInteraction({ endStroke: true });
+  };
+
+  const onPointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerIdRef.current !== null && event.pointerId !== activePointerIdRef.current) {
+      return;
     }
-    paintingRef.current = false;
-    strokeStartedRef.current = false;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    endInteraction({ endStroke: true });
   };
 
   const onPointerLeave = () => {
-    setPointerPos(null);
-    setIsPanning(false);
-    panningRef.current = false;
-    if (paintingRef.current && strokeStartedRef.current) {
-      onStrokeEnd();
-    }
-    paintingRef.current = false;
-    panningRef.current = false;
-    strokeStartedRef.current = false;
+    pointerPosRef.current = null;
+    setPointerHud(null);
+    redraw();
+    endInteraction({ endStroke: true });
   };
 
   const cursor = isPanning
@@ -347,9 +422,7 @@ export function EditorCanvas({
       ? "grab"
       : tool === "select"
         ? "crosshair"
-        : tool === "brush"
-          ? "none"
-          : "none";
+        : "none";
 
   return (
     <div
@@ -446,11 +519,13 @@ export function EditorCanvas({
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
             onPointerLeave={onPointerLeave}
+            onContextMenu={(event) => event.preventDefault()}
           />
         )}
 
-        {imageUrl && pointerPos ? (
+        {imageUrl && pointerHud ? (
           <div
             style={{
               position: "absolute",
@@ -465,12 +540,12 @@ export function EditorCanvas({
               pointerEvents: "none",
             }}
           >
-            {pointerPos.imageX}, {pointerPos.imageY}
+            {pointerHud.imageX}, {pointerHud.imageY}
             {tool !== "select" ? ` · ${activeRadius}px` : ""}
           </div>
         ) : null}
 
-        {imageUrl && tool !== "select" && !pointerPos ? (
+        {imageUrl && tool !== "select" && !pointerHud ? (
           <div
             style={{
               position: "absolute",
