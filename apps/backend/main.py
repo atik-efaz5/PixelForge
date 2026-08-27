@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Form, UploadFile
@@ -10,6 +11,7 @@ from fastapi.responses import JSONResponse, Response
 
 from apps.backend.dependencies import configure_cors, get_editing_service
 from apps.backend.errors import register_exception_handlers
+from apps.backend.isolated_runner import shutdown_persistent_workers
 from apps.backend.schemas import (
     EditByInstructionMetadata,
     EditingCapabilitiesResponse,
@@ -40,11 +42,18 @@ from pipelines.types import MaskRefinementOps
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def _app_lifespan(_application: FastAPI):
+    yield
+    shutdown_persistent_workers()
+
+
 def create_app() -> FastAPI:
     application = FastAPI(
         title="PixelForge",
         description="MVP image-editing API over SAM 2 segmentation and adapter inpainting.",
         version="0.1.0",
+        lifespan=_app_lifespan,
     )
     configure_cors(application)
     register_exception_handlers(application)

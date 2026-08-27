@@ -8,11 +8,18 @@ import os
 import subprocess
 import tempfile
 import time
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
+from apps.backend.persistent_worker import (
+    LineJsonWorkerClient,
+    WorkerCrashedError,
+    WorkerTimeoutError,
+    register_worker_client,
+)
 from models.config import model_entry, project_root
 from models.errors import ModelInferenceError, ModelLoadError
 from models.types import (
@@ -27,8 +34,19 @@ from models.types import (
 logger = logging.getLogger(__name__)
 
 _INPAINT_WORKER = project_root() / "scripts" / "isolated_inpaint_worker.py"
+_MOEBIUS_PERSISTENT_WORKER = project_root() / "scripts" / "moebius_persistent_worker.py"
 _GROUNDING_WORKER = project_root() / "scripts" / "isolated_grounding_worker.py"
 _SUBPROCESS_TIMEOUT_SEC = float(os.environ.get("PIXELFORGE_SUBPROCESS_TIMEOUT", "600"))
+
+
+def persistent_moebius_enabled() -> bool:
+    """Persistent Moebius worker is on by default; set PIXELFORGE_MOEBIUS_PERSISTENT_WORKER=0 to disable."""
+    return os.environ.get("PIXELFORGE_MOEBIUS_PERSISTENT_WORKER", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
 
 
 def _run_isolated(cmd: list[str], *, label: str) -> subprocess.CompletedProcess[str]:
@@ -58,6 +76,23 @@ def _env_python(env_name: str, *, override_var: str) -> Path:
 def moebius_python() -> Path:
     env_name = str(model_entry("moebius").get("environment") or "pixelforge-moebius")
     return _env_python(env_name, override_var="PIXELFORGE_MOEBIUS_PYTHON")
+
+
+@lru_cache(maxsize=1)
+def _moebius_worker_client() -> LineJsonWorkerClient:
+    client = LineJsonWorkerClient(
+        name="moebius",
+        python=moebius_python(),
+        script=_MOEBIUS_PERSISTENT_WORKER,
+    )
+    return register_worker_client(client)
+
+
+def shutdown_persistent_workers() -> None:
+    from apps.backend.persistent_worker import shutdown_all_workers
+
+    shutdown_all_workers()
+    _moebius_worker_client.cache_clear()
 
 
 def grounding_python() -> Path:
@@ -125,6 +160,75 @@ def inpaint_via_isolated_env(
     params: InpaintParams | None = None,
 ) -> InpaintingResult:
     """Run Moebius inpainting in ``pixelforge-moebius`` when in-process load fails."""
+    if persistent_moebius_enabled() and _MOEBIUS_PERSISTENT_WORKER.is_file():
+        try:
+            return inpaint_via_persistent_worker(image, mask, params=params)
+        except (ModelLoadError, WorkerCrashedError, WorkerTimeoutError) as exc:
+            logger.warning(
+                "persistent Moebius worker failed; falling back to one-shot subprocess: %s",
+                exc,
+            )
+    return inpaint_via_oneshot_subprocess(image, mask, params=params)
+
+
+def inpaint_via_persistent_worker(
+    image: np.ndarray,
+    mask: np.ndarray,
+    *,
+    params: InpaintParams | None = None,
+) -> InpaintingResult:
+    """Run Moebius via a long-lived worker that keeps the model loaded."""
+    if params is not None:
+        logger.warning("persistent Moebius worker ignores custom params in MVP bridge")
+
+    image = validate_image(image)
+    t0 = time.perf_counter()
+    with tempfile.TemporaryDirectory(prefix="pixelforge_inpaint_") as tmp:
+        tmp_path = Path(tmp)
+        image_path = tmp_path / "image.png"
+        mask_path = tmp_path / "mask.png"
+        out_path = tmp_path / "result.png"
+        Image.fromarray(image).save(image_path)
+        Image.fromarray((mask.astype(np.uint8) * 255), mode="L").save(mask_path)
+
+        client = _moebius_worker_client()
+        response = client.request(
+            {
+                "cmd": "inpaint",
+                "image": str(image_path),
+                "mask": str(mask_path),
+                "out": str(out_path),
+            }
+        )
+        if not out_path.is_file():
+            raise ModelInferenceError("Persistent Moebius worker produced no output.")
+
+        result_arr = validate_image(np.asarray(Image.open(out_path).convert("RGB")))
+
+    wall_ms = (time.perf_counter() - t0) * 1000.0
+    return InpaintingResult(
+        result=result_arr,
+        latency_ms=float(response.get("latency_ms") or wall_ms),
+        memory_mb=response.get("memory_mb"),
+        model=str(response.get("model") or "Moebius"),
+        backend=BackendType.LOCAL_MPS,
+        metadata={
+            **(response.get("metadata") or {}),
+            "isolated_env": str(moebius_python()),
+            "isolated_wall_ms": round(wall_ms, 3),
+            "worker_mode": "persistent",
+            "infer_ms": response.get("infer_ms"),
+        },
+    )
+
+
+def inpaint_via_oneshot_subprocess(
+    image: np.ndarray,
+    mask: np.ndarray,
+    *,
+    params: InpaintParams | None = None,
+) -> InpaintingResult:
+    """Legacy one-shot subprocess: load Moebius, infer, exit (per request)."""
     if params is not None:
         logger.warning("isolated_inpaint ignores custom params in MVP bridge")
     if not _INPAINT_WORKER.is_file():
@@ -171,5 +275,6 @@ def inpaint_via_isolated_env(
             **(meta.get("metadata") or {}),
             "isolated_env": str(python),
             "isolated_wall_ms": round(wall_ms, 3),
+            "worker_mode": "oneshot",
         },
     )
