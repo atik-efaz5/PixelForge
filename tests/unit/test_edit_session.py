@@ -74,15 +74,25 @@ class TestEditSessionHistory(unittest.TestCase):
             label="Generated",
             mask=_mask(),
             result_ref="result://1",
-            inpaint=InpaintMetadata(backend="moebius", latency_ms=12.0),
+            inpaint=InpaintMetadata(
+                backend="moebius",
+                latency_ms=12.0,
+                candidate_count=2,
+                selected_candidate_id="candidate_1",
+            ),
         )
         accepted = self.history.append(
             EditOperation.RESULT_ACCEPTED,
             label="Accepted",
             mask=_mask(),
             result_ref="result://1",
+            inpaint=InpaintMetadata(
+                backend="moebius",
+                selected_candidate_id="candidate_1",
+            ),
         )
         self.assertEqual(accepted.original_ref, original)
+        self.assertEqual(accepted.inpaint.selected_candidate_id, "candidate_1")
 
         self.history.append(
             EditOperation.RESULT_REJECTED,

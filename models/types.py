@@ -173,6 +173,7 @@ class InpaintParams:
     paste: bool | None = None
     noise_offset: float | None = None
     image_size: int | None = None
+    seed: int | None = None
 
 
 @dataclass
@@ -188,6 +189,60 @@ class InpaintingResult:
 
     def __post_init__(self) -> None:
         self.result = validate_image(self.result)
+
+
+@dataclass
+class InpaintCandidate:
+    """One generated inpainting candidate with reproducibility metadata."""
+
+    candidate_id: str
+    result: ImageArray
+    seed: int | None
+    latency_ms: float
+    memory_mb: float | None
+    model: str
+    backend: BackendType
+    output_hash: str
+    validity_status: str
+    generation_params: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.result = validate_image(self.result)
+
+
+@dataclass
+class InpaintCandidatesResult:
+    """Ranked multi-candidate inpainting output."""
+
+    candidates: list[InpaintCandidate]
+    selected_candidate_id: str
+    ranking: dict[str, Any]
+    model: str
+    backend: BackendType
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def primary(self) -> InpaintCandidate:
+        return self.candidates[0]
+
+    def as_inpainting_result(self) -> InpaintingResult:
+        """Best-ranked candidate as a single-result payload."""
+        best = self.primary
+        return InpaintingResult(
+            result=best.result,
+            latency_ms=best.latency_ms,
+            memory_mb=best.memory_mb,
+            model=best.model,
+            backend=best.backend,
+            metadata={
+                **best.metadata,
+                **self.metadata,
+                "candidate_id": best.candidate_id,
+                "candidate_count": len(self.candidates),
+                "ranking": self.ranking,
+            },
+        )
 
 
 @dataclass

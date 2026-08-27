@@ -36,6 +36,8 @@ from models.registry import get_adapter
 from models.types import (
     BackendType,
     ImageArray,
+    InpaintCandidate,
+    InpaintCandidatesResult,
     InpaintParams,
     InpaintingResult,
     InstructionEditParams,
@@ -54,6 +56,7 @@ from pipelines.errors import (
     UnsupportedEditIntentError,
 )
 from pipelines.mask_refinement import refine_mask, require_non_empty_mask
+from pipelines.candidate_seeds import derive_candidate_seeds, resolve_base_seed, validate_candidate_count
 from pipelines.editing_capabilities import (
     EditIntent,
     global_instruction_edit_supported,
@@ -493,6 +496,135 @@ class ImageEditPipeline:
             result.latency_ms,
         )
         return result
+
+    def generate_candidates(
+        self,
+        image: np.ndarray,
+        mask: np.ndarray,
+        backend: str = "moebius",
+        *,
+        count: int = 1,
+        params: InpaintParams | None = None,
+        base_seed: int | None = None,
+    ) -> InpaintCandidatesResult:
+        """Generate ``count`` inpainting candidates (1 or 2) and rank them."""
+        from evaluation.candidate_ranking import rank_inpaint_candidates
+        from evaluation.reproducibility import sha256_bytes
+
+        validate_candidate_count(count)
+        image = validate_image(image)
+        mask = require_non_empty_mask(validate_mask(mask, image=image), stage="inpaint")
+        routing = self._route_backend(
+            operation=RoutingOperation.INPAINT,
+            capability=RoutingCapability.LOCALIZED_INPAINT,
+            preferred_backend=backend,
+        )
+        backend = routing.model
+        adapter = self._resolve_inpaint_adapter(backend)
+        if not adapter.is_available():
+            raise ModelUnavailableError(
+                f"{adapter.model_name} ({backend}) is not available."
+            )
+
+        p = params or InpaintParams()
+        resolved_base = resolve_base_seed(base_seed if base_seed is not None else p.seed)
+        seeds = derive_candidate_seeds(resolved_base, count)
+
+        logger.info(
+            "generate_candidates_start model=%s backend=%s count=%d base_seed=%d",
+            adapter.model_name,
+            adapter.backend_type.value,
+            count,
+            resolved_base,
+        )
+
+        raw_candidates: list[tuple[str, InpaintingResult, int | None]] = []
+        total_t0 = time.perf_counter()
+        try:
+            self._prepare_local_adapter(adapter)
+            for index, seed in enumerate(seeds):
+                candidate_id = f"candidate_{index + 1}"
+                candidate_params = InpaintParams(
+                    num_steps=p.num_steps,
+                    guidance_scale=p.guidance_scale,
+                    strength=p.strength,
+                    paste=p.paste,
+                    noise_offset=p.noise_offset,
+                    image_size=p.image_size,
+                    seed=seed,
+                )
+                result = adapter.infer(image, mask, candidate_params)
+                raw_candidates.append((candidate_id, result, seed))
+        except (ModelLoadError, ModelInferenceError, ModelUnavailableError):
+            raise
+        except Exception as exc:
+            raise ModelInferenceError("Candidate generation failed.") from exc
+        finally:
+            if self._unload_between_stages:
+                self._release_local_adapter(adapter)
+
+        total_ms = (time.perf_counter() - total_t0) * 1000.0
+        ranking = rank_inpaint_candidates(
+            image,
+            mask,
+            [(cid, res.result) for cid, res, _ in raw_candidates],
+        )
+
+        by_id = {cid: (res, seed) for cid, res, seed in raw_candidates}
+        ordered: list[InpaintCandidate] = []
+        for scored in ranking.ordered:
+            result, seed = by_id[scored.candidate_id]
+            gen_params = dict(result.metadata)
+            gen_params["seed"] = seed
+            ordered.append(
+                InpaintCandidate(
+                    candidate_id=scored.candidate_id,
+                    result=result.result,
+                    seed=seed,
+                    latency_ms=result.latency_ms,
+                    memory_mb=result.memory_mb,
+                    model=result.model,
+                    backend=result.backend,
+                    output_hash=scored.output_hash or sha256_bytes(result.result.tobytes()),
+                    validity_status=scored.validity_status,
+                    generation_params=gen_params,
+                    metadata={
+                        "candidate_score": scored.score,
+                        "score_components": {
+                            k: v.to_dict() for k, v in scored.components.items()
+                        },
+                    },
+                )
+            )
+
+        ranking_dict = ranking.to_dict()
+        ranking_dict["eval"] = ranking.to_eval_record(
+            candidate_count=count,
+            selected_candidate_id=ranking.selected.candidate_id,
+        )
+
+        logger.info(
+            "generate_candidates_done model=%s count=%d selected=%s total_ms=%.3f",
+            adapter.model_name,
+            count,
+            ranking.selected.candidate_id,
+            total_ms,
+        )
+
+        return InpaintCandidatesResult(
+            candidates=ordered,
+            selected_candidate_id=ranking.selected.candidate_id,
+            ranking=ranking_dict,
+            model=ordered[0].model if ordered else adapter.model_name,
+            backend=ordered[0].backend if ordered else adapter.backend_type,
+            metadata={
+                "candidate_count": count,
+                "base_seed": resolved_base,
+                "derived_seeds": seeds,
+                "pipeline_latency_ms": round(total_ms, 3),
+                "routing": routing.to_dict(),
+            },
+        )
 
     def edit_localized(
         self,

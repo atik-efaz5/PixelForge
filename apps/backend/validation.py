@@ -92,6 +92,7 @@ def validate_inpaint_params_fields(
     strength: float | None,
     noise_offset: float | None,
     image_size: int | None,
+    seed: int | None = None,
 ) -> None:
     if num_steps is not None and not (1 <= num_steps <= 200):
         raise InvalidInputError("num_steps must be between 1 and 200.")
@@ -103,3 +104,17 @@ def validate_inpaint_params_fields(
         raise InvalidInputError("noise_offset must be between 0 and 1.")
     if image_size is not None and not (64 <= image_size <= 4096):
         raise InvalidInputError("image_size must be between 64 and 4096.")
+    if seed is not None and not (0 <= seed <= 2**31 - 1):
+        raise InvalidInputError("seed must be a non-negative 31-bit integer.")
+
+
+def validate_candidate_count_field(candidate_count: int | None) -> int:
+    """Validate optional candidate_count form field (defaults to 1)."""
+    if candidate_count is None:
+        return 1
+    try:
+        from pipelines.candidate_seeds import validate_candidate_count
+
+        return validate_candidate_count(candidate_count)
+    except ValueError as exc:
+        raise InvalidInputError(str(exc)) from exc

@@ -45,6 +45,35 @@ class InpaintMetadata(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class InpaintCandidateInfo(BaseModel):
+    """One ranked inpainting candidate (metadata only; PNG in multipart body)."""
+
+    candidate_id: str
+    rank: int
+    score: float
+    seed: int | None = None
+    latency_ms: float
+    memory_mb: float | None = None
+    output_hash: str
+    validity_status: str
+    generation_params: dict[str, Any] = Field(default_factory=dict)
+    score_components: dict[str, Any] = Field(default_factory=dict)
+
+
+class InpaintCandidatesMetadata(BaseModel):
+    """JSON metadata for multi-candidate ``POST /inpaint`` multipart responses."""
+
+    model: str
+    backend: str
+    candidate_count: int
+    selected_candidate_id: str
+    candidates: list[InpaintCandidateInfo]
+    ranking: dict[str, Any] = Field(default_factory=dict)
+    latency_ms: float
+    memory_mb: float | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class RemoveObjectMetadata(BaseModel):
     """JSON metadata for ``POST /remove-object``. Result pixels are returned as PNG."""
 

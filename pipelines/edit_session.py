@@ -40,6 +40,8 @@ class InpaintMetadata:
     backend: str
     model: str | None = None
     latency_ms: float | None = None
+    candidate_count: int | None = None
+    selected_candidate_id: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
 

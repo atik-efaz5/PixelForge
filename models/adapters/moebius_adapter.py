@@ -257,6 +257,15 @@ class MoebiusAdapter(InpaintingAdapter):
 
         pil_img = image_to_pil_rgb(image)
         pil_mask = mask_to_pil_l(mask)
+        if p.seed is not None:
+            import random
+
+            import numpy as np
+            import torch
+
+            torch.manual_seed(p.seed)
+            random.seed(p.seed)
+            np.random.seed(p.seed % (2**32 - 1))
         t0 = time.perf_counter()
         try:
             out_list = self._pipe(
@@ -292,6 +301,7 @@ class MoebiusAdapter(InpaintingAdapter):
                 "paste": paste,
                 "noise_offset": noise_offset,
                 "image_size": image_size,
+                "seed": p.seed,
                 "device": "mps",
                 "import_isolation": True,
             },

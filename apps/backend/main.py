@@ -29,6 +29,8 @@ from apps.backend.schemas import (
 from apps.backend.services import (
     ImageEditingService,
     backend_label,
+    build_inpaint_candidates_metadata,
+    build_multipart_inpaint_response,
     decode_upload_image,
     decode_upload_mask,
     image_to_png_bytes,
@@ -38,7 +40,7 @@ from apps.backend.services import (
     png_response_headers,
     segmentation_backend,
 )
-from apps.backend.validation import validate_point
+from apps.backend.validation import validate_candidate_count_field, validate_point
 from pipelines.types import MaskRefinementOps
 
 logger = logging.getLogger(__name__)
@@ -173,15 +175,21 @@ def build_router():
             description="Mask PNG: white (255) = inpaint, black (0) = preserve.",
         ),
         backend: str = Form("moebius"),
+        candidate_count: int = Form(
+            1,
+            description="Number of candidates to generate (1 or 2). Default 1.",
+        ),
         num_steps: int | None = Form(None),
         guidance_scale: float | None = Form(None),
         strength: float | None = Form(None),
         paste: bool | None = Form(None),
         noise_offset: float | None = Form(None),
         image_size: int | None = Form(None),
+        seed: int | None = Form(None),
     ) -> Response:
         rgb = await decode_upload_image(image)
         mask_arr = await decode_upload_mask(mask, image=rgb, require_nonempty=True)
+        count = validate_candidate_count_field(candidate_count)
         params = parse_inpaint_params(
             num_steps=num_steps,
             guidance_scale=guidance_scale,
@@ -189,22 +197,39 @@ def build_router():
             paste=paste,
             noise_offset=noise_offset,
             image_size=image_size,
+            seed=seed,
         )
-        result = service.inpaint(rgb, mask_arr, backend=backend, params=params)
-        meta = InpaintMetadata(
-            model=result.model,
-            backend=backend_label(result.backend),
-            latency_ms=result.latency_ms,
-            memory_mb=result.memory_mb,
-            metadata=result.metadata,
+        if count == 1:
+            result = service.inpaint(rgb, mask_arr, backend=backend, params=params)
+            meta = InpaintMetadata(
+                model=result.model,
+                backend=backend_label(result.backend),
+                latency_ms=result.latency_ms,
+                memory_mb=result.memory_mb,
+                metadata=result.metadata,
+            )
+            headers = png_response_headers(meta.model_dump())
+            headers["Content-Disposition"] = 'inline; filename="inpaint.png"'
+            return Response(
+                content=image_to_png_bytes(result.result),
+                media_type="image/png",
+                headers=headers,
+            )
+
+        candidates_result = service.generate_candidates(
+            rgb,
+            mask_arr,
+            backend=backend,
+            params=params,
+            count=count,
         )
-        headers = png_response_headers(meta.model_dump())
-        headers["Content-Disposition"] = 'inline; filename="inpaint.png"'
-        return Response(
-            content=image_to_png_bytes(result.result),
-            media_type="image/png",
-            headers=headers,
-        )
+        metadata = build_inpaint_candidates_metadata(candidates_result)
+        png_parts = [
+            (candidate.candidate_id, image_to_png_bytes(candidate.result))
+            for candidate in candidates_result.candidates
+        ]
+        body, content_type = build_multipart_inpaint_response(metadata, png_parts)
+        return Response(content=body, media_type=content_type)
 
     @router.post("/remove-object")
     async def remove_object(

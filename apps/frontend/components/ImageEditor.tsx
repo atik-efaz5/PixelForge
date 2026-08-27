@@ -35,9 +35,11 @@ import type {
   EditorTool,
   ImageDimensions,
   InpaintBackend,
+  InpaintCandidateResult,
   SelectionMode,
 } from "@/types/api";
 import { ControlPanel } from "@/components/ControlPanel";
+import { CandidatePicker } from "@/components/CandidatePicker";
 import { EditorCanvas } from "@/components/EditorCanvas";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { GenerationStatus } from "@/components/GenerationStatus";
@@ -85,6 +87,9 @@ export function ImageEditor() {
   const [canSessionUndo, setCanSessionUndo] = useState(false);
   const [canSessionRedo, setCanSessionRedo] = useState(false);
   const [hasPendingResult, setHasPendingResult] = useState(false);
+  const [generateTwoCandidates, setGenerateTwoCandidates] = useState(false);
+  const [pendingCandidates, setPendingCandidates] = useState<InpaintCandidateResult[]>([]);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [backend, setBackend] = useState<InpaintBackend>("auto");
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("smart");
   const [textPrompt, setTextPrompt] = useState("");
@@ -187,6 +192,26 @@ export function ImageEditor() {
       setHasAiMask(Boolean(snapshot.aiMask));
       setResultUrl(snapshot.resultUrl);
       setLatencyMs(snapshot.inpaint?.latencyMs ?? null);
+      if (snapshot.inpaint?.candidates && snapshot.inpaint.candidates.length > 1) {
+        setPendingCandidates(
+          snapshot.inpaint.candidates.map((candidate) => ({
+            id: candidate.id,
+            blob: new Blob(),
+            url: candidate.url,
+            rank: candidate.rank ?? 0,
+            score: candidate.score ?? 0,
+            seed: null,
+          }))
+        );
+        setSelectedCandidateId(
+          snapshot.inpaint.selectedCandidateId ??
+            snapshot.inpaint.candidates[0]?.id ??
+            null
+        );
+      } else {
+        setPendingCandidates([]);
+        setSelectedCandidateId(null);
+      }
       if (snapshot.inpaint) {
         setResultModel(snapshot.inpaint.model);
         setResultBackend(
@@ -663,9 +688,48 @@ export function ImageEditor() {
         imageSize.width,
         imageSize.height
       );
-      const { blob, metadata } = await inpaint(imageFile, maskBlob, backend);
+      const candidateCount = generateTwoCandidates ? 2 : 1;
+      const response = await inpaint(imageFile, maskBlob, backend, { candidateCount });
+
+      if (response.mode === "single") {
+        setPendingCandidates([]);
+        setSelectedCandidateId(null);
+        const routing = extractRouting(response.metadata.metadata);
+        const url = URL.createObjectURL(response.blob);
+        setResultModel(response.metadata.model);
+        setResultBackend(response.metadata.backend);
+        setInpaintLine(
+          formatInpaintLine({
+            requestedBackend: backend,
+            model: response.metadata.model,
+            backend: response.metadata.backend,
+            routing,
+          })
+        );
+        recordSession({
+          operation: "INPAINT",
+          label: "Inpainting complete",
+          mask: maskRef.current,
+          aiMask: aiMaskRef.current,
+          resultUrl: url,
+          selection: lastSelectionMetaRef.current,
+          inpaint: {
+            backend,
+            model: response.metadata.model,
+            latencyMs: response.metadata.latency_ms ?? undefined,
+            candidateCount: 1,
+          },
+        });
+        return;
+      }
+
+      const { metadata, candidates } = response.response;
       const routing = extractRouting(metadata.metadata);
-      const url = URL.createObjectURL(blob);
+      const recommended =
+        candidates.find((c) => c.id === metadata.selected_candidate_id) ??
+        candidates[0];
+      setPendingCandidates(candidates);
+      setSelectedCandidateId(recommended.id);
       setResultModel(metadata.model);
       setResultBackend(metadata.backend);
       setInpaintLine(
@@ -678,15 +742,24 @@ export function ImageEditor() {
       );
       recordSession({
         operation: "INPAINT",
-        label: "Inpainting complete",
+        label: "Inpainting complete (2 candidates)",
         mask: maskRef.current,
         aiMask: aiMaskRef.current,
-        resultUrl: url,
+        resultUrl: recommended.url,
         selection: lastSelectionMetaRef.current,
         inpaint: {
           backend,
           model: metadata.model,
           latencyMs: metadata.latency_ms ?? undefined,
+          candidateCount: 2,
+          selectedCandidateId: recommended.id,
+          ranking: metadata.ranking,
+          candidates: candidates.map((candidate) => ({
+            id: candidate.id,
+            url: candidate.url,
+            score: candidate.score,
+            rank: candidate.rank,
+          })),
         },
       });
     } catch (err) {
@@ -697,26 +770,58 @@ export function ImageEditor() {
     } finally {
       setStatus("idle");
     }
-  }, [backend, busy, clearError, imageFile, imageSize, recordSession, setError]);
+  }, [
+    backend,
+    busy,
+    clearError,
+    generateTwoCandidates,
+    imageFile,
+    imageSize,
+    recordSession,
+    setError,
+  ]);
 
   const handleUseResult = useCallback(() => {
     if (!hasPendingResult || !resultUrl) return;
+    const selectedId =
+      selectedCandidateId ??
+      pendingCandidates.find((candidate) => candidate.url === resultUrl)?.id;
+    const currentInpaint = sessionHistoryRef.current.current()?.inpaint;
+    sessionHistoryRef.current.releaseCandidatesExcept(resultUrl);
+    setPendingCandidates([]);
+    setSelectedCandidateId(null);
     recordSession({
       operation: "RESULT_ACCEPTED",
-      label: "Result accepted",
+      label: selectedId ? `Result accepted (${selectedId})` : "Result accepted",
       mask: maskRef.current,
       aiMask: aiMaskRef.current,
       resultUrl,
       selection: lastSelectionMetaRef.current,
-      inpaint: sessionHistoryRef.current.current()?.inpaint,
+      inpaint: {
+        backend: currentInpaint?.backend ?? backend,
+        model: currentInpaint?.model,
+        latencyMs: currentInpaint?.latencyMs,
+        selectedCandidateId: selectedId ?? undefined,
+        candidateCount: pendingCandidates.length > 1 ? 2 : 1,
+      },
     });
     setHasPendingResult(false);
-  }, [hasPendingResult, recordSession, resultUrl]);
+  }, [
+    backend,
+    hasPendingResult,
+    pendingCandidates,
+    recordSession,
+    resultUrl,
+    selectedCandidateId,
+  ]);
 
   const handleDiscardResult = useCallback(() => {
     const current = sessionHistoryRef.current.current();
     if (!current || current.operation !== "INPAINT" || !current.resultUrl) return;
     sessionHistoryRef.current.releaseResult(current.resultUrl);
+    sessionHistoryRef.current.releaseCandidatesExcept(null);
+    setPendingCandidates([]);
+    setSelectedCandidateId(null);
     const previous = sessionHistoryRef.current.previousResultSnapshot();
     recordSession({
       operation: "RESULT_REJECTED",
@@ -728,6 +833,23 @@ export function ImageEditor() {
     });
     setHasPendingResult(false);
   }, [recordSession]);
+
+  const handleSelectCandidate = useCallback((candidateId: string) => {
+    const selected = pendingCandidates.find((candidate) => candidate.id === candidateId);
+    if (!selected) return;
+    setSelectedCandidateId(candidateId);
+    setResultUrl(selected.url);
+    const current = sessionHistoryRef.current.current();
+    if (current?.operation === "INPAINT") {
+      current.resultUrl = selected.url;
+      if (current.inpaint) {
+        current.inpaint = {
+          ...current.inpaint,
+          selectedCandidateId: candidateId,
+        };
+      }
+    }
+  }, [pendingCandidates]);
 
   const handleRestorePrevious = useCallback(() => {
     const previous = sessionHistoryRef.current.previousResultSnapshot();
@@ -977,6 +1099,20 @@ export function ImageEditor() {
             onRestorePrevious={handleRestorePrevious}
           />
 
+          {pendingCandidates.length > 1 ? (
+            <CandidatePicker
+              options={pendingCandidates.map((candidate, index) => ({
+                id: candidate.id,
+                url: candidate.url,
+                label: `Option ${index + 1}`,
+                score: candidate.score,
+                selected: candidate.id === selectedCandidateId,
+              }))}
+              disabled={busy}
+              onSelect={handleSelectCandidate}
+            />
+          ) : null}
+
           <ResultPanel
             originalUrl={imageUrl}
             maskPreviewUrl={maskPreview}
@@ -1011,6 +1147,8 @@ export function ImageEditor() {
           canRedo={canRedo}
           busy={busy}
           canGenerate={Boolean(imageFile && mask && maskHasInpaint(mask))}
+          generateTwoCandidates={generateTwoCandidates}
+          onGenerateTwoCandidatesChange={setGenerateTwoCandidates}
           textPrompt={textPrompt}
           detections={detections}
           detectionIndex={detectionIndex}

@@ -21,6 +21,15 @@ export interface InpaintSessionMetadata {
   backend: InpaintBackend | string;
   model?: string;
   latencyMs?: number;
+  candidateCount?: number;
+  selectedCandidateId?: string;
+  candidates?: Array<{
+    id: string;
+    url: string;
+    score?: number;
+    rank?: number;
+  }>;
+  ranking?: Record<string, unknown>;
 }
 
 export interface EditSessionSnapshot {
@@ -66,6 +75,7 @@ export class EditSessionHistory {
   private originalUrl: string | null = null;
   private readonly maxEntries: number;
   private readonly ownedResultUrls = new Set<string>();
+  private readonly ownedCandidateUrls = new Set<string>();
 
   constructor(maxEntries = 30) {
     this.maxEntries = Math.max(1, maxEntries);
@@ -135,6 +145,13 @@ export class EditSessionHistory {
     if (entry.resultUrl?.startsWith("blob:")) {
       this.ownedResultUrls.add(entry.resultUrl);
     }
+    if (entry.inpaint?.candidates) {
+      for (const candidate of entry.inpaint.candidates) {
+        if (candidate.url.startsWith("blob:")) {
+          this.ownedCandidateUrls.add(candidate.url);
+        }
+      }
+    }
 
     this.entries.push(entry);
     this.index = this.entries.length - 1;
@@ -190,6 +207,21 @@ export class EditSessionHistory {
     }
   }
 
+  releaseCandidatesExcept(keepUrl: string | null): void {
+    for (const url of Array.from(this.ownedCandidateUrls)) {
+      if (keepUrl && url === keepUrl) continue;
+      URL.revokeObjectURL(url);
+      this.ownedCandidateUrls.delete(url);
+    }
+    for (const entry of this.entries) {
+      if (!entry.inpaint?.candidates) continue;
+      entry.inpaint = {
+        ...entry.inpaint,
+        candidates: entry.inpaint.candidates.filter((c) => c.url === keepUrl),
+      };
+    }
+  }
+
   dispose(): void {
     this.disposeOwnedResults();
     this.entries = [];
@@ -203,6 +235,14 @@ export class EditSessionHistory {
       if (entry.resultUrl) {
         this.revokeResultUrl(entry.resultUrl);
       }
+      if (entry.inpaint?.candidates) {
+        for (const candidate of entry.inpaint.candidates) {
+          if (this.ownedCandidateUrls.has(candidate.url)) {
+            URL.revokeObjectURL(candidate.url);
+            this.ownedCandidateUrls.delete(candidate.url);
+          }
+        }
+      }
     }
     this.entries = this.entries.slice(0, this.index + 1);
   }
@@ -212,6 +252,10 @@ export class EditSessionHistory {
       URL.revokeObjectURL(url);
     }
     this.ownedResultUrls.clear();
+    for (const url of this.ownedCandidateUrls) {
+      URL.revokeObjectURL(url);
+    }
+    this.ownedCandidateUrls.clear();
   }
 
   private revokeResultUrl(url: string): void {

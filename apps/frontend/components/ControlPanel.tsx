@@ -21,6 +21,8 @@ interface ControlPanelProps {
   canRedo: boolean;
   busy: boolean;
   canGenerate: boolean;
+  generateTwoCandidates: boolean;
+  onGenerateTwoCandidatesChange: (enabled: boolean) => void;
   textPrompt: string;
   detections: DetectionInfo[];
   detectionIndex: number;
@@ -67,6 +69,8 @@ export function ControlPanel({
   canRedo,
   busy,
   canGenerate,
+  generateTwoCandidates,
+  onGenerateTwoCandidatesChange,
   textPrompt,
   detections,
   detectionIndex,
@@ -402,6 +406,15 @@ export function ControlPanel({
 
       <section>
         <h2 style={sectionTitleStyle}>Localized Fill</h2>
+        <label style={checkboxLabelStyle}>
+          <input
+            type="checkbox"
+            checked={generateTwoCandidates}
+            disabled={busy}
+            onChange={(event) => onGenerateTwoCandidatesChange(event.target.checked)}
+          />
+          Generate 2 candidates
+        </label>
         <button
           type="button"
           disabled={busy || !canGenerate}

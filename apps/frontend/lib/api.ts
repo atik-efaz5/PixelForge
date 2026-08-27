@@ -3,6 +3,9 @@ import type {
   EditByInstructionMetadata,
   HealthResponse,
   InpaintBackend,
+  InpaintCandidateResult,
+  InpaintCandidatesMetadata,
+  InpaintCandidatesResponse,
   InpaintMetadata,
   ModelsResponse,
   RoutingResponse,
@@ -95,6 +98,98 @@ async function readPngResponse<T extends object>(
   };
 }
 
+function parseMultipartBoundary(contentType: string): string | null {
+  const match = /boundary=([^;]+)/i.exec(contentType);
+  if (!match) return null;
+  return match[1].trim().replace(/^"|"$/g, "");
+}
+
+async function readMultipartInpaintCandidates(
+  response: Response
+): Promise<InpaintCandidatesResponse> {
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  const boundary = parseMultipartBoundary(contentType);
+  if (!boundary) {
+    throw new Error("Expected multipart candidate response.");
+  }
+
+  const raw = new Uint8Array(await response.arrayBuffer());
+  const textDecoder = new TextDecoder();
+  const boundaryToken = new TextEncoder().encode(`--${boundary}`);
+  const crlfcrlf = new Uint8Array([0x0d, 0x0a, 0x0d, 0x0a]);
+
+  const findSequence = (haystack: Uint8Array, needle: Uint8Array, from = 0): number => {
+    outer: for (let i = from; i <= haystack.length - needle.length; i += 1) {
+      for (let j = 0; j < needle.length; j += 1) {
+        if (haystack[i + j] !== needle[j]) continue outer;
+      }
+      return i;
+    }
+    return -1;
+  };
+
+  let metadata: InpaintCandidatesMetadata | null = null;
+  const blobs = new Map<string, Blob>();
+  let offset = findSequence(raw, boundaryToken, 0);
+
+  while (offset >= 0) {
+    let partStart = offset + boundaryToken.length;
+    if (raw[partStart] === 0x0d && raw[partStart + 1] === 0x0a) {
+      partStart += 2;
+    }
+    const nextBoundary = findSequence(raw, boundaryToken, partStart);
+    const partEnd = nextBoundary >= 0 ? nextBoundary - 2 : raw.length;
+    const part = raw.slice(partStart, partEnd);
+    const headerEnd = findSequence(part, crlfcrlf, 0);
+    if (headerEnd >= 0) {
+      const headers = textDecoder.decode(part.slice(0, headerEnd));
+      const body = part.slice(headerEnd + 4);
+      const nameMatch = /name="([^"]+)"/.exec(headers);
+      if (nameMatch) {
+        const name = nameMatch[1];
+        if (name === "metadata") {
+          metadata = JSON.parse(textDecoder.decode(body)) as InpaintCandidatesMetadata;
+        } else {
+          blobs.set(name, new Blob([body], { type: "image/png" }));
+        }
+      }
+    }
+    if (nextBoundary < 0) break;
+    offset = nextBoundary;
+    if (raw[offset + boundaryToken.length] === 0x2d && raw[offset + boundaryToken.length + 1] === 0x2d) {
+      break;
+    }
+  }
+
+  if (!metadata) {
+    throw new Error("Candidate response missing metadata part.");
+  }
+
+  const candidates: InpaintCandidateResult[] = metadata.candidates.map((info) => {
+    const blob = blobs.get(info.candidate_id);
+    if (!blob) {
+      throw new Error(`Missing PNG for ${info.candidate_id}.`);
+    }
+    return {
+      id: info.candidate_id,
+      blob,
+      url: URL.createObjectURL(blob),
+      rank: info.rank,
+      score: info.score,
+      seed: info.seed,
+    };
+  });
+
+  return { metadata, candidates };
+}
+
+export type InpaintResponse =
+  | { mode: "single"; blob: Blob; metadata: InpaintMetadata }
+  | { mode: "candidates"; response: InpaintCandidatesResponse };
+
 export async function health(): Promise<HealthResponse> {
   const response = await fetch(`${apiBaseUrl()}/health`);
   if (!response.ok) {
@@ -146,25 +241,36 @@ export async function segment(
 export async function inpaint(
   image: File,
   mask: Blob,
-  backend: InpaintBackend = "moebius"
-): Promise<PngWithMetadata<InpaintMetadata>> {
+  backend: InpaintBackend = "moebius",
+  options?: { candidateCount?: 1 | 2 }
+): Promise<InpaintResponse> {
   const form = new FormData();
   form.append("image", image, image.name || "image.png");
   form.append("mask", mask, "mask.png");
   form.append("backend", backend);
+  const candidateCount = options?.candidateCount ?? 1;
+  form.append("candidate_count", String(candidateCount));
 
   const response = await fetch(`${apiBaseUrl()}/inpaint`, {
     method: "POST",
     body: form,
   });
 
-  return readPngResponse<InpaintMetadata>(response, [
+  if (candidateCount > 1) {
+    return {
+      mode: "candidates",
+      response: await readMultipartInpaintCandidates(response),
+    };
+  }
+
+  const single = await readPngResponse<InpaintMetadata>(response, [
     "model",
     "backend",
     "latency_ms",
     "memory_mb",
     "metadata",
   ]);
+  return { mode: "single", blob: single.blob, metadata: single.metadata };
 }
 
 export async function selectByText(

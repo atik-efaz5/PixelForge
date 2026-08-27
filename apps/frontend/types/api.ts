@@ -60,6 +60,45 @@ export interface InpaintMetadata {
   metadata: Record<string, unknown>;
 }
 
+export interface InpaintCandidateInfo {
+  candidate_id: string;
+  rank: number;
+  score: number;
+  seed: number | null;
+  latency_ms: number;
+  memory_mb: number | null;
+  output_hash: string;
+  validity_status: string;
+  generation_params: Record<string, unknown>;
+  score_components: Record<string, unknown>;
+}
+
+export interface InpaintCandidatesMetadata {
+  model: string;
+  backend: string;
+  candidate_count: number;
+  selected_candidate_id: string;
+  candidates: InpaintCandidateInfo[];
+  ranking: Record<string, unknown>;
+  latency_ms: number;
+  memory_mb: number | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface InpaintCandidateResult {
+  id: string;
+  blob: Blob;
+  url: string;
+  rank: number;
+  score: number;
+  seed: number | null;
+}
+
+export interface InpaintCandidatesResponse {
+  metadata: InpaintCandidatesMetadata;
+  candidates: InpaintCandidateResult[];
+}
+
 export interface EditByInstructionMetadata {
   model: string;
   backend: string;

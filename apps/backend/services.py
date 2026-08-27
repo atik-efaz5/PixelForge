@@ -26,6 +26,7 @@ from models.registry import get_adapter, known_models
 from models.router import list_routing_catalog
 from models.types import (
     BackendType,
+    InpaintCandidatesResult,
     InpaintParams,
     InpaintingResult,
     InstructionEditParams,
@@ -171,6 +172,64 @@ class ImageEditingService:
             logger.warning("in-process Moebius load failed; using isolated env: %s", exc)
             return inpaint_via_isolated_env(image, mask, params=params)
 
+    def generate_candidates(
+        self,
+        image: np.ndarray,
+        mask: np.ndarray,
+        *,
+        backend: str = "moebius",
+        params: InpaintParams | None = None,
+        count: int = 1,
+    ) -> InpaintCandidatesResult:
+        logger.info("service_generate_candidates backend=%s count=%d", backend, count)
+        try:
+            return self._pipeline.generate_candidates(
+                image, mask, backend=backend, count=count, params=params
+            )
+        except ModelLoadError as exc:
+            if backend.strip().lower() != "moebius" or count != 1:
+                raise
+            logger.warning(
+                "in-process Moebius load failed for single candidate; using isolated env: %s",
+                exc,
+            )
+            single = inpaint_via_isolated_env(image, mask, params=params)
+            from evaluation.candidate_ranking import rank_inpaint_candidates
+            from evaluation.reproducibility import sha256_bytes
+            from models.types import InpaintCandidate
+
+            ranking = rank_inpaint_candidates(
+                image, mask, [("candidate_1", single.result)]
+            )
+            scored = ranking.selected
+            return InpaintCandidatesResult(
+                candidates=[
+                    InpaintCandidate(
+                        candidate_id="candidate_1",
+                        result=single.result,
+                        seed=params.seed if params else None,
+                        latency_ms=single.latency_ms,
+                        memory_mb=single.memory_mb,
+                        model=single.model,
+                        backend=single.backend,
+                        output_hash=scored.output_hash or sha256_bytes(single.result.tobytes()),
+                        validity_status=scored.validity_status,
+                        generation_params=dict(single.metadata),
+                        metadata={
+                            "candidate_score": scored.score,
+                            "score_components": {
+                                k: v.to_dict() for k, v in scored.components.items()
+                            },
+                        },
+                    )
+                ],
+                selected_candidate_id="candidate_1",
+                ranking=ranking.to_dict(),
+                model=single.model,
+                backend=single.backend,
+                metadata={"isolated_fallback": True},
+            )
+
     def select_by_text(
         self,
         image: np.ndarray,
@@ -312,6 +371,7 @@ def parse_inpaint_params(
     paste: bool | None = None,
     noise_offset: float | None = None,
     image_size: int | None = None,
+    seed: int | None = None,
 ) -> InpaintParams | None:
     fields = {
         "num_steps": num_steps,
@@ -320,6 +380,7 @@ def parse_inpaint_params(
         "paste": paste,
         "noise_offset": noise_offset,
         "image_size": image_size,
+        "seed": seed,
     }
     if all(value is None for value in fields.values()):
         return None
@@ -329,8 +390,71 @@ def parse_inpaint_params(
         strength=strength,
         noise_offset=noise_offset,
         image_size=image_size,
+        seed=seed,
     )
     return InpaintParams(**fields)
+
+
+def build_inpaint_candidates_metadata(result: InpaintCandidatesResult) -> dict[str, Any]:
+    """Serialize multi-candidate metadata for multipart responses."""
+    total_latency = sum(c.latency_ms for c in result.candidates)
+    memory = next((c.memory_mb for c in result.candidates if c.memory_mb is not None), None)
+    candidates = []
+    for rank, candidate in enumerate(result.candidates, start=1):
+        candidates.append(
+            {
+                "candidate_id": candidate.candidate_id,
+                "rank": rank,
+                "score": candidate.metadata.get("candidate_score", 0.0),
+                "seed": candidate.seed,
+                "latency_ms": candidate.latency_ms,
+                "memory_mb": candidate.memory_mb,
+                "output_hash": candidate.output_hash,
+                "validity_status": candidate.validity_status,
+                "generation_params": candidate.generation_params,
+                "score_components": candidate.metadata.get("score_components", {}),
+            }
+        )
+    return {
+        "model": result.model,
+        "backend": backend_label(result.backend),
+        "candidate_count": len(result.candidates),
+        "selected_candidate_id": result.selected_candidate_id,
+        "candidates": candidates,
+        "ranking": result.ranking,
+        "latency_ms": round(total_latency, 3),
+        "memory_mb": memory,
+        "metadata": result.metadata,
+    }
+
+
+def build_multipart_inpaint_response(
+    metadata: dict[str, Any],
+    candidates: list[tuple[str, bytes]],
+) -> tuple[bytes, str]:
+    """Build multipart/form-data body with JSON metadata and PNG parts."""
+    boundary = "pixelforge-candidate-" + "0" * 16
+    body = bytearray()
+    meta_bytes = json.dumps(metadata, separators=(",", ":"), default=str).encode("utf-8")
+    body.extend(f"--{boundary}\r\n".encode())
+    body.extend(
+        b'Content-Disposition: form-data; name="metadata"\r\n'
+        b"Content-Type: application/json\r\n\r\n"
+    )
+    body.extend(meta_bytes)
+    body.extend(b"\r\n")
+    for candidate_id, png_bytes in candidates:
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(
+            f'Content-Disposition: form-data; name="{candidate_id}"; '
+            f'filename="{candidate_id}.png"\r\n'.encode()
+        )
+        body.extend(b"Content-Type: image/png\r\n\r\n")
+        body.extend(png_bytes)
+        body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode())
+    content_type = f"multipart/form-data; boundary={boundary}"
+    return bytes(body), content_type
 
 
 def parse_instruction_edit_params(
