@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { editByInstruction, inpaint, segment, selectByText } from "@/lib/api";
+import { editByInstruction, inpaint, segment, selectByText, selectSmart } from "@/lib/api";
 import { fitViewport, zoomIn, zoomOut, type CanvasViewport } from "@/lib/canvasView";
 import { deriveEditorPhase, PHASE_LABELS } from "@/lib/editorPhase";
 import { toUserFacingError, type UserFacingError } from "@/lib/formatError";
 import {
   formatInpaintLine,
   formatSelectionLine,
+  formatSmartSelectionLine,
   type ModelLine,
 } from "@/lib/modelLabels";
 import { validateImageFile } from "@/lib/imageUpload";
@@ -34,6 +35,7 @@ import type {
   EditorTool,
   ImageDimensions,
   InpaintBackend,
+  SelectionMode,
 } from "@/types/api";
 import { ControlPanel } from "@/components/ControlPanel";
 import { EditorCanvas } from "@/components/EditorCanvas";
@@ -84,6 +86,7 @@ export function ImageEditor() {
   const [canSessionRedo, setCanSessionRedo] = useState(false);
   const [hasPendingResult, setHasPendingResult] = useState(false);
   const [backend, setBackend] = useState<InpaintBackend>("auto");
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>("smart");
   const [textPrompt, setTextPrompt] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [detections, setDetections] = useState<DetectionInfo[]>([]);
@@ -278,6 +281,7 @@ export function ImageEditor() {
       setViewport(fitViewport());
       setSelectionLine(null);
       setInpaintLine(null);
+      setSelectionMode("smart");
       setResultModel(undefined);
       setResultBackend(undefined);
       const entry = sessionHistoryRef.current.reset(url);
@@ -316,6 +320,7 @@ export function ImageEditor() {
     setViewport(fitViewport());
     setSelectionLine(null);
     setInpaintLine(null);
+    setSelectionMode("smart");
     setResultModel(undefined);
     setResultBackend(undefined);
     setSessionEntries([]);
@@ -379,27 +384,50 @@ export function ImageEditor() {
     setStatus("grounding");
     clearError();
     try {
-      const { blob, metadata } = await selectByText(
-        imageFile,
-        prompt,
-        detectionIndex
-      );
-      setDetections(metadata.detections || []);
-      setDetectionIndex(metadata.detection_index ?? 0);
-      setSelectionLine(
-        formatSelectionLine({
+      if (selectionMode === "text") {
+        const { blob, metadata } = await selectByText(
+          imageFile,
+          prompt,
+          detectionIndex
+        );
+        setDetections(metadata.detections || []);
+        setDetectionIndex(metadata.detection_index ?? 0);
+        setSelectionLine(
+          formatSelectionLine({
+            method: "text",
+            model: metadata.model,
+            groundingBackend: metadata.grounding_backend,
+            segmentationModel: metadata.segmentation_model,
+          })
+        );
+        await applyMaskFromBlob(blob, {
           method: "text",
-          model: metadata.model,
-          groundingBackend: metadata.grounding_backend,
-          segmentationModel: metadata.segmentation_model,
-        })
-      );
-      await applyMaskFromBlob(blob, {
-        method: "text",
-        prompt,
-        label: metadata.selected_label,
-        detectionIndex: metadata.detection_index,
-      });
+          prompt,
+          label: metadata.selected_label ?? undefined,
+          detectionIndex: metadata.detection_index ?? undefined,
+        });
+      } else {
+        const { blob, metadata } = await selectSmart(imageFile, {
+          selectionMode,
+          prompt,
+          detectionIndex,
+        });
+        setDetections(metadata.detections || []);
+        setDetectionIndex(metadata.detection_index ?? 0);
+        setSelectionLine(
+          formatSmartSelectionLine({
+            selectionMode,
+            method: metadata.method as "point" | "text",
+            confidenceTier: metadata.confidence_tier,
+          })
+        );
+        await applyMaskFromBlob(blob, {
+          method: "text",
+          prompt,
+          label: metadata.selected_label ?? undefined,
+          detectionIndex: metadata.detection_index ?? undefined,
+        });
+      }
     } catch (err) {
       setError(err);
       setLastRetry(() => () => {
@@ -415,6 +443,7 @@ export function ImageEditor() {
     detectionIndex,
     imageFile,
     imageSize,
+    selectionMode,
     setError,
     textPrompt,
   ]);
@@ -426,57 +455,92 @@ export function ImageEditor() {
       setStatus("grounding");
       clearError();
       try {
-        const { blob, metadata } = await selectByText(
-          imageFile,
-          textPrompt.trim(),
-          index
-        );
-        setDetections(metadata.detections || []);
-        setSelectionLine(
-          formatSelectionLine({
+        const prompt = textPrompt.trim();
+        if (selectionMode === "text") {
+          const { blob, metadata } = await selectByText(imageFile, prompt, index);
+          setDetections(metadata.detections || []);
+          setSelectionLine(
+            formatSelectionLine({
+              method: "text",
+              model: metadata.model,
+              groundingBackend: metadata.grounding_backend,
+              segmentationModel: metadata.segmentation_model,
+            })
+          );
+          await applyMaskFromBlob(blob, {
             method: "text",
-            model: metadata.model,
-            groundingBackend: metadata.grounding_backend,
-            segmentationModel: metadata.segmentation_model,
-          })
-        );
-        await applyMaskFromBlob(blob, {
-          method: "text",
-          prompt: textPrompt.trim(),
-          label: metadata.selected_label,
-          detectionIndex: index,
-        });
+            prompt,
+            label: metadata.selected_label ?? undefined,
+            detectionIndex: index,
+          });
+        } else {
+          const { blob, metadata } = await selectSmart(imageFile, {
+            selectionMode,
+            prompt,
+            detectionIndex: index,
+          });
+          setDetections(metadata.detections || []);
+          setSelectionLine(
+            formatSmartSelectionLine({
+              selectionMode,
+              method: metadata.method as "point" | "text",
+              confidenceTier: metadata.confidence_tier,
+            })
+          );
+          await applyMaskFromBlob(blob, {
+            method: "text",
+            prompt,
+            label: metadata.selected_label ?? undefined,
+            detectionIndex: index,
+          });
+        }
       } catch (err) {
         setError(err);
       } finally {
         setStatus("idle");
       }
     },
-    [applyMaskFromBlob, busy, clearError, imageFile, setError, textPrompt]
+    [applyMaskFromBlob, busy, clearError, imageFile, selectionMode, setError, textPrompt]
   );
 
   const handlePointSelect = useCallback(
     async (x: number, y: number) => {
-      if (!imageFile || !imageSize || busy) return;
+      if (!imageFile || !imageSize || busy || selectionMode === "text") return;
       setStatus("segmenting");
       clearError();
       try {
-        const { blob, metadata } = await segment(imageFile, x, y);
-        setSelectionLine(
-          formatSelectionLine({
-            method: "point",
-            model: metadata.model,
-            backend: metadata.backend,
-          })
-        );
-        await applyMaskFromBlob(blob, { method: "point" });
+        if (selectionMode === "point") {
+          const { blob, metadata } = await segment(imageFile, x, y);
+          setSelectionLine(
+            formatSelectionLine({
+              method: "point",
+              model: metadata.model,
+              backend: metadata.backend,
+            })
+          );
+          await applyMaskFromBlob(blob, { method: "point" });
+        } else {
+          const { blob, metadata } = await selectSmart(imageFile, {
+            selectionMode,
+            x,
+            y,
+          });
+          setSelectionLine(
+            formatSmartSelectionLine({
+              selectionMode,
+              method: metadata.method as "point" | "text",
+              confidenceTier: metadata.confidence_tier,
+            })
+          );
+          await applyMaskFromBlob(blob, { method: "point" });
+        }
       } catch (err) {
         setError(err);
       } finally {
         setStatus("idle");
       }
     },
-    [applyMaskFromBlob, busy, clearError, imageFile, imageSize, setError]
+    [applyMaskFromBlob, busy, clearError, imageFile, imageSize, selectionMode, setError]
   );
 
   const recordMaskRefined = useCallback(
@@ -931,6 +995,8 @@ export function ImageEditor() {
         <ControlPanel
           hasImage={Boolean(imageUrl)}
           onNewSession={handleNewSession}
+          selectionMode={selectionMode}
+          onSelectionModeChange={setSelectionMode}
           tool={tool}
           backend={backend}
           onBackendChange={setBackend}

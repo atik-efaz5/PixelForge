@@ -24,6 +24,7 @@ from apps.backend.schemas import (
     RoutingResponse,
     SegmentMetadata,
     SelectByTextMetadata,
+    SelectSmartMetadata,
 )
 from apps.backend.services import (
     ImageEditingService,
@@ -322,6 +323,80 @@ def build_router():
             metadata={
                 **result.metadata,
                 **result.grounding.metadata,
+                **result.segmentation.metadata,
+            },
+        )
+        headers = png_response_headers(meta.model_dump())
+        headers["Content-Disposition"] = 'inline; filename="mask.png"'
+        return Response(
+            content=mask_to_png_bytes(result.mask),
+            media_type="image/png",
+            headers=headers,
+        )
+
+    @router.post("/select-smart")
+    async def select_smart(
+        service: Annotated[ImageEditingService, Depends(get_editing_service)],
+        image: UploadFile = File(..., description="RGB image."),
+        selection_mode: str = Form("smart", description="smart | point | text"),
+        x: int | None = Form(None, description="Prompt X (column) for point/smart click."),
+        y: int | None = Form(None, description="Prompt Y (row) for point/smart click."),
+        prompt: str | None = Form(None, description="Object description for text/smart."),
+        detection_index: int | None = Form(
+            None, description="Optional detection index for text mode."
+        ),
+        grounding_backend: str = Form("grounding_dino"),
+    ) -> Response:
+        rgb = await decode_upload_image(image)
+        if x is not None and y is not None:
+            validate_point(rgb, x, y)
+        result = service.select_smart(
+            rgb,
+            x=x,
+            y=y,
+            text_prompt=prompt,
+            selection_mode=selection_mode,
+            detection_index=detection_index,
+            grounding_backend=grounding_backend,
+        )
+        detections: list[dict] = []
+        grounding_backend_value = None
+        selected_label = None
+        selected_box = None
+        if result.grounding is not None:
+            grounding_backend_value = result.grounding.backend.value
+            detections = [
+                {
+                    "index": idx,
+                    "label": det.label,
+                    "confidence": det.confidence,
+                    "box_xyxy": [det.x1, det.y1, det.x2, det.y2],
+                }
+                for idx, det in enumerate(result.grounding.detections)
+            ]
+        if result.selected_detection is not None:
+            box = result.selected_detection
+            selected_label = box.label
+            selected_box = [box.x1, box.y1, box.x2, box.y2]
+
+        meta = SelectSmartMetadata(
+            selection_mode=result.selection_mode,
+            method=result.method,
+            confidence_tier=result.confidence_tier,
+            model=result.grounding.model if result.grounding else result.segmentation.model,
+            segmentation_model=result.segmentation.model,
+            grounding_backend=grounding_backend_value,
+            confidence=result.segmentation.confidence,
+            prompt=result.metadata.get("prompt"),
+            point_xy=result.metadata.get("point_xy"),
+            detection_index=result.metadata.get("selected_detection_index"),
+            detection_count=result.metadata.get("detection_count"),
+            selected_label=selected_label,
+            selected_box_xyxy=selected_box,
+            detections=detections,
+            ranking=result.ranking,
+            metadata={
+                **result.metadata,
                 **result.segmentation.metadata,
             },
         )

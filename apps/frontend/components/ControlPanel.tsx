@@ -1,10 +1,12 @@
 "use client";
 
-import type { DetectionInfo, EditorTool, InpaintBackend } from "@/types/api";
+import type { DetectionInfo, EditorTool, InpaintBackend, SelectionMode } from "@/types/api";
 
 interface ControlPanelProps {
   hasImage: boolean;
   onNewSession: () => void;
+  selectionMode: SelectionMode;
+  onSelectionModeChange: (mode: SelectionMode) => void;
   tool: EditorTool;
   backend: InpaintBackend;
   onBackendChange: (backend: InpaintBackend) => void;
@@ -49,6 +51,8 @@ interface ControlPanelProps {
 export function ControlPanel({
   hasImage,
   onNewSession,
+  selectionMode,
+  onSelectionModeChange,
   tool,
   backend,
   onBackendChange,
@@ -141,11 +145,26 @@ export function ControlPanel({
       <section>
         <h2 style={sectionTitleStyle}>Selection</h2>
         <label style={labelStyle}>
+          Selection mode
+          <select
+            value={selectionMode}
+            disabled={busy}
+            onChange={(event) =>
+              onSelectionModeChange(event.target.value as SelectionMode)
+            }
+            style={{ width: "100%", marginTop: 6 }}
+          >
+            <option value="smart">Smart</option>
+            <option value="point">Point</option>
+            <option value="text">Text</option>
+          </select>
+        </label>
+        <label style={labelStyle}>
           Select object
           <input
             type="text"
             value={textPrompt}
-            disabled={busy}
+            disabled={busy || selectionMode === "point"}
             placeholder="dog, red car, person..."
             onChange={(event) => onTextPromptChange(event.target.value)}
             style={{ width: "100%", marginTop: 6, padding: "8px 10px" }}
@@ -153,7 +172,7 @@ export function ControlPanel({
         </label>
         <button
           type="button"
-          disabled={busy || !textPrompt.trim()}
+          disabled={busy || !textPrompt.trim() || selectionMode === "point"}
           onClick={onFindObject}
           aria-label="Find object by text description"
           style={{ ...secondaryButtonStyle, marginTop: 8 }}
@@ -181,7 +200,7 @@ export function ControlPanel({
           <button
             type="button"
             aria-pressed={tool === "select"}
-            disabled={busy}
+            disabled={busy || selectionMode === "text"}
             aria-label="Click to select object on image"
             onClick={() => onToolChange("select")}
             style={toolButtonStyle(tool === "select")}
@@ -189,6 +208,9 @@ export function ControlPanel({
             Click object
           </button>
         </div>
+        <p style={hintStyle}>
+          Smart ranks SAM2 / Grounding candidates. Point = click only. Text = prompt only.
+        </p>
         <p style={hintStyle}>
           Shortcuts: B brush · E eraser · +/- zoom · 0 fit · Cmd/Ctrl+Z undo
         </p>

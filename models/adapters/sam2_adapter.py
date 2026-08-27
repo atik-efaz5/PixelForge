@@ -147,6 +147,65 @@ class SAM2Adapter(SegmentationAdapter):
         """Click-prompted mask. ``(x, y)`` are pixel coordinates, origin top-left."""
         return self.infer(image, x, y)
 
+    def segment_point_candidates(
+        self, image: np.ndarray, x: int, y: int
+    ) -> list[SegmentationResult]:
+        """Return multimask SAM2 point candidates (deterministic ordering)."""
+        image = validate_image(image)
+        if not self._loaded:
+            self.load()
+        if self._predictor is None:
+            raise ModelLoadError("SAM 2 is not loaded.")
+
+        h, w = image.shape[:2]
+        if not (0 <= x < w and 0 <= y < h):
+            raise ModelInferenceError(
+                f"Point ({x}, {y}) is outside the image ({w}×{h})."
+            )
+
+        coords = np.array([[x, y]], dtype=np.float32)
+        labels = np.array([1], dtype=np.int32)
+        t0 = time.perf_counter()
+        try:
+            self._predictor.set_image(image)
+            masks, scores, _low_res = self._predictor.predict(
+                point_coords=coords,
+                point_labels=labels,
+                multimask_output=True,
+            )
+            mps_synchronize()
+        except Exception as exc:
+            self._error = type(exc).__name__
+            raise ModelInferenceError("SAM 2 multimask inference failed.") from exc
+
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        results: list[SegmentationResult] = []
+        for idx, (mask_arr, score) in enumerate(zip(masks, scores)):
+            mask = np.asarray(mask_arr).astype(bool)
+            if mask.shape != (h, w):
+                raise ModelInferenceError(
+                    f"SAM 2 mask shape {mask.shape} does not match image {(h, w)}."
+                )
+            results.append(
+                SegmentationResult(
+                    mask=mask,
+                    confidence=float(np.atleast_1d(score)[0]),
+                    model=self.model_name,
+                    method="point",
+                    metadata={
+                        "prompt_xy": [int(x), int(y)],
+                        "prompt_label": 1,
+                        "multimask_index": idx,
+                        "device": "mps",
+                        "checkpoint": str(self._checkpoint),
+                        "latency_ms": round(latency_ms, 3),
+                        "memory_mb": mps_memory_mb(),
+                        "project_root": str(project_root()),
+                    },
+                )
+            )
+        return results
+
     def segment_box(
         self, image: np.ndarray, x1: int, y1: int, x2: int, y2: int
     ) -> SegmentationResult:

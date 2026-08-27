@@ -3,6 +3,7 @@ export interface ModelLine {
   model: string;
   backend: string;
   route?: string;
+  confidenceTier?: string;
 }
 
 const MODEL_NAMES: Record<string, string> = {
@@ -52,6 +53,26 @@ export function formatInpaintLine(input: {
     route: isAuto
       ? `Automatic → ${formatModelName(resolvedModel)}`
       : undefined,
+  };
+}
+
+export function formatSmartSelectionLine(input: {
+  selectionMode: string;
+  method: "point" | "text";
+  confidenceTier: string;
+}): ModelLine {
+  const modeLabel =
+    input.selectionMode === "smart"
+      ? "Smart"
+      : input.selectionMode === "point"
+        ? "Point"
+        : "Text";
+  const path = input.method === "text" ? "Grounding DINO → SAM 2" : "SAM 2";
+  return {
+    label: "Selection",
+    model: `${modeLabel} → ${path}`,
+    backend: input.method === "text" ? "CPU → Local" : "Local",
+    confidenceTier: input.confidenceTier,
   };
 }
 

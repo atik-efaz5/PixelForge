@@ -113,6 +113,29 @@ export interface DetectionInfo {
   box_xyxy: number[];
 }
 
+export type SelectionMode = "smart" | "point" | "text";
+
+export type ConfidenceTier = "HIGH" | "MEDIUM" | "LOW";
+
+export interface SelectSmartMetadata {
+  selection_mode: string;
+  method: string;
+  confidence_tier: ConfidenceTier;
+  model: string;
+  segmentation_model: string;
+  grounding_backend?: string | null;
+  confidence: number | null;
+  prompt?: string | null;
+  point_xy?: number[] | null;
+  detection_index?: number | null;
+  detection_count?: number | null;
+  selected_label?: string | null;
+  selected_box_xyxy?: number[] | null;
+  detections: DetectionInfo[];
+  ranking: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+}
+
 export type InpaintBackend = "auto" | "moebius";
 
 export type EditorTool = "select" | "brush" | "erase";

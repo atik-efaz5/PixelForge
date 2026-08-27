@@ -32,6 +32,7 @@ from models.types import (
     InstructionEditResult,
     SegmentationResult,
     TextSelectionResult,
+    SmartSelectionResult,
     pil_rgb_to_array,
     validate_image,
     validate_mask,
@@ -200,6 +201,34 @@ class ImageEditingService:
             return self._pipeline.select_from_grounding(
                 image, grounding, detection_index=detection_index
             )
+
+    def select_smart(
+        self,
+        image: np.ndarray,
+        *,
+        x: int | None = None,
+        y: int | None = None,
+        text_prompt: str | None = None,
+        selection_mode: str = "smart",
+        detection_index: int | None = None,
+        grounding_backend: str = "grounding_dino",
+    ) -> SmartSelectionResult:
+        logger.info(
+            "service_select_smart mode=%s x=%s y=%s prompt=%r",
+            selection_mode,
+            x,
+            y,
+            text_prompt,
+        )
+        return self._pipeline.select_smart(
+            image,
+            x=x,
+            y=y,
+            text_prompt=text_prompt,
+            selection_mode=selection_mode,
+            detection_index=detection_index,
+            grounding_backend=grounding_backend,
+        )
 
     def remove_object(
         self,

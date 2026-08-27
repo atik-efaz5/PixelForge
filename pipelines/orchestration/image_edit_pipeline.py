@@ -142,6 +142,243 @@ class ImageEditPipeline:
         result.metadata.setdefault("routing", routing.to_dict())
         return result
 
+    def select_smart(
+        self,
+        image: np.ndarray,
+        *,
+        x: int | None = None,
+        y: int | None = None,
+        text_prompt: str | None = None,
+        selection_mode: str = "smart",
+        detection_index: int | None = None,
+        grounding_backend: str = "grounding_dino",
+    ):
+        """Rank segmentation candidates with deterministic heuristics.
+
+        ``selection_mode``:
+        - ``smart`` — text path when prompt provided, else point path
+        - ``point`` — explicit click segmentation (with multimask ranking)
+        - ``text`` — explicit grounding + box path (all detections ranked)
+        """
+        from models.types import SmartSelectionResult
+        from pipelines.selection_quality import rank_candidates, score_mask_candidate
+
+        image = validate_image(image)
+        mode = selection_mode.strip().lower()
+        if mode not in {"smart", "point", "text"}:
+            raise PipelineValidationError(
+                f"Unknown selection_mode '{selection_mode}'. Use smart, point, or text."
+            )
+
+        if mode == "point":
+            if x is None or y is None:
+                raise PipelineValidationError("Point mode requires x and y coordinates.")
+            return self._select_smart_point(
+                image, x, y, selection_mode=mode, rank_fn=rank_candidates, score_fn=score_mask_candidate
+            )
+
+        if mode == "text":
+            prompt = self._validate_text_prompt(text_prompt or "")
+            return self._select_smart_text(
+                image,
+                prompt,
+                selection_mode=mode,
+                detection_index=detection_index,
+                grounding_backend=grounding_backend,
+                rank_fn=rank_candidates,
+                score_fn=score_mask_candidate,
+            )
+
+        # smart — route by available input without reinterpreting explicit modes
+        if text_prompt and text_prompt.strip():
+            prompt = self._validate_text_prompt(text_prompt)
+            return self._select_smart_text(
+                image,
+                prompt,
+                selection_mode=mode,
+                detection_index=detection_index,
+                grounding_backend=grounding_backend,
+                rank_fn=rank_candidates,
+                score_fn=score_mask_candidate,
+            )
+        if x is not None and y is not None:
+            return self._select_smart_point(
+                image, x, y, selection_mode=mode, rank_fn=rank_candidates, score_fn=score_mask_candidate
+            )
+        raise PipelineValidationError(
+            "Smart selection requires a text prompt or point coordinates."
+        )
+
+    def _select_smart_point(self, image, x, y, *, selection_mode, rank_fn, score_fn):
+        from models.types import SmartSelectionResult
+
+        self._validate_point(image, x, y)
+        routing = self._route_backend(
+            operation=RoutingOperation.SEGMENT_POINT,
+            capability=RoutingCapability.OBJECT_SELECTION_POINT,
+            preferred_backend="sam2",
+        )
+        adapter = self._segmentation_provider()
+        self._require_segmentation_adapter(adapter)
+        if not adapter.is_available():
+            raise ModelUnavailableError(f"{adapter.model_name} is not available.")
+
+        logger.info("select_smart_point point=(%d,%d) mode=%s", x, y, selection_mode)
+        t0 = time.perf_counter()
+        try:
+            self._prepare_local_adapter(adapter)
+            if hasattr(adapter, "segment_point_candidates"):
+                candidates = adapter.segment_point_candidates(image, x, y)
+            else:
+                candidates = [adapter.infer(image, x, y)]
+        except (ModelLoadError, ModelInferenceError, ModelUnavailableError):
+            raise
+        except Exception as exc:
+            raise ModelInferenceError("Smart point selection failed.") from exc
+        finally:
+            if self._unload_between_stages:
+                self._release_local_adapter(adapter)
+
+        scored = [
+            score_fn(
+                seg.mask,
+                candidate_id=f"sam2_point_{idx}",
+                point_xy=(x, y),
+                sam_confidence=seg.confidence,
+            )
+            for idx, seg in enumerate(candidates)
+        ]
+        try:
+            ranking = rank_fn(scored)
+        except ValueError as exc:
+            raise ModelInferenceError(
+                "No valid mask candidates for the selected point."
+            ) from exc
+        best_idx = int(ranking.selected.candidate_id.rsplit("_", 1)[-1])
+        segmentation = candidates[best_idx]
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        segmentation.metadata.setdefault("pipeline_latency_ms", round(elapsed_ms, 3))
+        segmentation.metadata.setdefault("routing", routing.to_dict())
+        segmentation.metadata["selection_ranking"] = ranking.to_dict()
+
+        return SmartSelectionResult(
+            mask=segmentation.mask,
+            method="point",
+            confidence_tier=ranking.selected.tier.value,
+            selection_mode=selection_mode,
+            segmentation=segmentation,
+            ranking=ranking.to_dict(),
+            metadata={
+                "point_xy": [x, y],
+                "candidate_count": len(candidates),
+                "pipeline_latency_ms": round(elapsed_ms, 3),
+                "routing": routing.to_dict(),
+            },
+        )
+
+    def _select_smart_text(
+        self,
+        image,
+        prompt: str,
+        *,
+        selection_mode: str,
+        detection_index: int | None,
+        grounding_backend: str,
+        rank_fn,
+        score_fn,
+    ):
+        from models.types import SmartSelectionResult
+
+        grounding = self._run_grounding(image, prompt, grounding_backend)
+        if not grounding.detections:
+            raise ModelInferenceError(f"No objects found for prompt '{prompt}'.")
+
+        detections = list(grounding.detections)
+        if detection_index is not None:
+            if detection_index < 0 or detection_index >= len(detections):
+                raise PipelineValidationError(
+                    f"detection_index {detection_index} out of range "
+                    f"(found {len(detections)})."
+                )
+            detections = [detections[detection_index]]
+
+        adapter = self._segmentation_provider()
+        self._require_segmentation_adapter(adapter)
+        if not adapter.is_available():
+            raise ModelUnavailableError(f"{adapter.model_name} is not available.")
+
+        logger.info(
+            "select_smart_text prompt=%r detections=%d mode=%s",
+            prompt,
+            len(detections),
+            selection_mode,
+        )
+        t0 = time.perf_counter()
+        segmentations: list[SegmentationResult] = []
+        try:
+            self._prepare_local_adapter(adapter)
+            for det_idx, detection in enumerate(detections):
+                x1, y1, x2, y2 = detection.as_xyxy_int()
+                if hasattr(adapter, "segment_box"):
+                    seg = adapter.segment_box(image, x1, y1, x2, y2)
+                else:
+                    seg = adapter.infer(image, x1, y1)
+                segmentations.append(seg)
+        except (ModelLoadError, ModelInferenceError, ModelUnavailableError):
+            raise
+        except Exception as exc:
+            raise ModelInferenceError("Smart text selection failed.") from exc
+        finally:
+            if self._unload_between_stages:
+                self._release_local_adapter(adapter)
+
+        scored = []
+        for det_idx, (detection, seg) in enumerate(zip(detections, segmentations)):
+            x1, y1, x2, y2 = detection.as_xyxy_int()
+            scored.append(
+                score_fn(
+                    seg.mask,
+                    candidate_id=f"detection_{det_idx}",
+                    box_xyxy=(float(x1), float(y1), float(x2), float(y2)),
+                    sam_confidence=seg.confidence,
+                )
+            )
+
+        if not scored:
+            raise ModelInferenceError(f"No objects found for prompt '{prompt}'.")
+
+        try:
+            ranking = rank_fn(scored)
+        except ValueError as exc:
+            raise ModelInferenceError(
+                f"No valid mask candidates for prompt '{prompt}'."
+            ) from exc
+        best_idx = int(ranking.selected.candidate_id.replace("detection_", ""))
+        segmentation = segmentations[best_idx]
+        selected_detection = detections[best_idx]
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        segmentation.metadata.setdefault("pipeline_latency_ms", round(elapsed_ms, 3))
+        segmentation.metadata["selection_ranking"] = ranking.to_dict()
+
+        return SmartSelectionResult(
+            mask=segmentation.mask,
+            method="text",
+            confidence_tier=ranking.selected.tier.value,
+            selection_mode=selection_mode,
+            segmentation=segmentation,
+            grounding=grounding,
+            selected_detection=selected_detection,
+            ranking=ranking.to_dict(),
+            metadata={
+                "prompt": prompt,
+                "detection_count": len(grounding.detections),
+                "selected_detection_index": best_idx,
+                "grounding_model": grounding.model,
+                "segmentation_model": segmentation.model,
+                "pipeline_latency_ms": round(elapsed_ms, 3),
+            },
+        )
+
     def select_by_text(
         self,
         image: np.ndarray,

@@ -39,6 +39,25 @@ function StatusLine({ line }: { line: ModelLine }) {
     <div style={{ minWidth: 0 }}>
       <span style={{ color: "#7b8494", marginRight: 6 }}>{line.label}:</span>
       <span style={{ color: "#e8eaed", fontWeight: 500 }}>{detail}</span>
+      {line.confidenceTier ? (
+        <span
+          style={{
+            marginLeft: 8,
+            fontSize: 11,
+            fontWeight: 600,
+            color: tierColor(line.confidenceTier),
+            textTransform: "capitalize",
+          }}
+        >
+          {line.confidenceTier.toLowerCase()} confidence
+        </span>
+      ) : null}
     </div>
   );
+}
+
+function tierColor(tier: string): string {
+  if (tier === "HIGH") return "#4ade80";
+  if (tier === "MEDIUM") return "#fbbf24";
+  return "#f87171";
 }

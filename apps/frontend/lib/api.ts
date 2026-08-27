@@ -9,7 +9,9 @@ import type {
   PngWithMetadata,
   RemoveObjectMetadata,
   SelectByTextMetadata,
+  SelectSmartMetadata,
   SegmentMetadata,
+  SelectionMode,
 } from "@/types/api";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
@@ -193,6 +195,52 @@ export async function selectByText(
     "selected_label",
     "selected_box_xyxy",
     "detections",
+    "metadata",
+  ]);
+}
+
+export async function selectSmart(
+  image: File,
+  options: {
+    selectionMode?: SelectionMode;
+    x?: number;
+    y?: number;
+    prompt?: string;
+    detectionIndex?: number;
+  }
+): Promise<PngWithMetadata<SelectSmartMetadata>> {
+  const form = new FormData();
+  form.append("image", image, image.name || "image.png");
+  form.append("selection_mode", options.selectionMode ?? "smart");
+  if (options.x !== undefined) form.append("x", String(options.x));
+  if (options.y !== undefined) form.append("y", String(options.y));
+  if (options.prompt) form.append("prompt", options.prompt);
+  if (options.detectionIndex !== undefined) {
+    form.append("detection_index", String(options.detectionIndex));
+  }
+  form.append("grounding_backend", "grounding_dino");
+
+  const response = await fetch(`${apiBaseUrl()}/select-smart`, {
+    method: "POST",
+    body: form,
+  });
+
+  return readPngResponse<SelectSmartMetadata>(response, [
+    "selection_mode",
+    "method",
+    "confidence_tier",
+    "model",
+    "segmentation_model",
+    "grounding_backend",
+    "confidence",
+    "prompt",
+    "point_xy",
+    "detection_index",
+    "detection_count",
+    "selected_label",
+    "selected_box_xyxy",
+    "detections",
+    "ranking",
     "metadata",
   ]);
 }

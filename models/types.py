@@ -146,6 +146,24 @@ class TextSelectionResult:
 
 
 @dataclass
+class SmartSelectionResult:
+    """Mask from smart selection with heuristic quality metadata."""
+
+    mask: MaskArray
+    method: str
+    confidence_tier: str
+    selection_mode: str
+    segmentation: SegmentationResult
+    ranking: dict[str, Any]
+    grounding: GroundingResult | None = None
+    selected_detection: BoundingBox | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.mask = validate_mask(self.mask)
+
+
+@dataclass
 class InpaintParams:
     """Optional inpainting knobs. ``None`` fields use the adapter's upstream defaults."""
 

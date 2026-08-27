@@ -74,6 +74,27 @@ class SelectByTextMetadata(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class SelectSmartMetadata(BaseModel):
+    """JSON metadata for ``POST /select-smart``. Mask pixels are returned as PNG."""
+
+    selection_mode: str
+    method: str
+    confidence_tier: str
+    model: str
+    segmentation_model: str
+    grounding_backend: str | None = None
+    confidence: float | None = None
+    prompt: str | None = None
+    point_xy: list[int] | None = None
+    detection_index: int | None = None
+    detection_count: int | None = None
+    selected_label: str | None = None
+    selected_box_xyxy: list[float] | None = None
+    detections: list[dict[str, Any]] = Field(default_factory=list)
+    ranking: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class EditingCapabilityEntry(BaseModel):
     """Declared edit intents for one editing backend."""
 
