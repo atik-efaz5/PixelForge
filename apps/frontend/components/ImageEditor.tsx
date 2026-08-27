@@ -12,6 +12,7 @@ import {
   type ModelLine,
 } from "@/lib/modelLabels";
 import { validateImageFile } from "@/lib/imageUpload";
+import { UploadObjectUrlRegistry, isObjectUrl } from "@/lib/uploadObjectUrl";
 import {
   EditSessionHistory,
   type EditSessionSnapshot,
@@ -48,7 +49,7 @@ import { ModelStatusPanel } from "@/components/ModelStatusPanel";
 import { ResultPanel } from "@/components/ResultPanel";
 
 function revokeIfObjectUrl(url: string | null) {
-  if (url && url.startsWith("blob:")) {
+  if (url && isObjectUrl(url)) {
     URL.revokeObjectURL(url);
   }
 }
@@ -110,6 +111,7 @@ export function ImageEditor() {
   const aiMaskRef = useRef<Uint8Array | null>(null);
   const maskHistoryRef = useRef(new MaskEditHistory());
   const sessionHistoryRef = useRef(new EditSessionHistory());
+  const sourceUrlRegistryRef = useRef(new UploadObjectUrlRegistry());
   const strokeSnapshotRef = useRef<Uint8Array | null>(null);
   const lastSelectionMetaRef = useRef<SelectionMetadata | undefined>(undefined);
 
@@ -277,7 +279,7 @@ export function ImageEditor() {
 
   const resetSession = useCallback(
     (file: File, url: string, size: ImageDimensions) => {
-      revokeIfObjectUrl(imageUrl);
+      sourceUrlRegistryRef.current.adopt(url);
       sessionHistoryRef.current.dispose();
       setImageFile(file);
       setImageUrl(url);
@@ -312,11 +314,11 @@ export function ImageEditor() {
       const entry = sessionHistoryRef.current.reset(url);
       applySnapshot(entry);
     },
-    [applySnapshot, clearError, imageUrl]
+    [applySnapshot, clearError]
   );
 
   const handleNewSession = useCallback(() => {
-    revokeIfObjectUrl(imageUrl);
+    sourceUrlRegistryRef.current.release();
     sessionHistoryRef.current.dispose();
     setImageFile(null);
     setImageUrl(null);
@@ -353,7 +355,7 @@ export function ImageEditor() {
     setCanSessionUndo(false);
     setCanSessionRedo(false);
     setStatus("idle");
-  }, [clearError, imageUrl]);
+  }, [clearError]);
 
   const handleUpload = useCallback(
     async (file: File) => {
@@ -1006,17 +1008,9 @@ export function ImageEditor() {
     handleUndo,
   ]);
 
-  // Revoke replaced blob URLs when imageUrl changes or the editor unmounts.
-  // Do not dispose the edit session here — resetSession owns session lifecycle.
-  useEffect(() => {
-    const url = imageUrl;
-    return () => {
-      revokeIfObjectUrl(url);
-    };
-  }, [imageUrl]);
-
   useEffect(() => {
     return () => {
+      sourceUrlRegistryRef.current.release();
       sessionHistoryRef.current.dispose();
     };
   }, []);

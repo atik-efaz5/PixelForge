@@ -228,6 +228,7 @@ export class EditSessionHistory {
     this.disposeOwnedResults();
     this.entries = [];
     this.index = -1;
+    // originalUrl is a borrowed reference to the editor-owned upload URL — never revoked here.
     this.originalUrl = null;
   }
 

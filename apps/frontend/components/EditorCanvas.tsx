@@ -15,6 +15,7 @@ import {
   zoomOut,
   zoomViewportAtPoint,
 } from "@/lib/canvasView";
+import { shouldReloadCanvasImage } from "@/lib/canvasImageSource";
 import { drawMaskOverlay } from "@/lib/mask";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -65,6 +66,9 @@ export function EditorCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const loadedSourceUrlRef = useRef<string | null>(null);
+  const imageUrlRef = useRef<string | null>(imageUrl);
+  imageUrlRef.current = imageUrl;
   const layoutRef = useRef<ReturnType<typeof computeViewLayout> | null>(null);
   const paintingRef = useRef(false);
   const panningRef = useRef(false);
@@ -212,8 +216,10 @@ export function EditorCanvas({
   redrawRef.current = redraw;
 
   useEffect(() => {
-    if (!imageUrl) {
+    const sourceUrl = imageUrl;
+    if (!sourceUrl) {
       imageRef.current = null;
+      loadedSourceUrlRef.current = null;
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext("2d");
       if (canvas && ctx) {
@@ -222,14 +228,29 @@ export function EditorCanvas({
       return;
     }
 
+    if (!shouldReloadCanvasImage(loadedSourceUrlRef.current, sourceUrl, !!imageRef.current)) {
+      redrawRef.current();
+      return;
+    }
+
     const img = new Image();
     img.onload = () => {
+      if (imageUrlRef.current !== sourceUrl) return;
       imageRef.current = img;
+      loadedSourceUrlRef.current = sourceUrl;
       redrawRef.current();
     };
-    img.src = imageUrl;
+    img.onerror = () => {
+      if (imageUrlRef.current !== sourceUrl) return;
+      // Keep the last successfully decoded frame if a reload fails.
+      if (loadedSourceUrlRef.current === sourceUrl && imageRef.current) {
+        redrawRef.current();
+      }
+    };
+    img.src = sourceUrl;
     return () => {
       img.onload = null;
+      img.onerror = null;
     };
   }, [imageUrl]);
 
