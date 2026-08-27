@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editByInstruction, inpaint, segment, selectByText } from "@/lib/api";
+import { fitViewport, zoomIn, zoomOut, type CanvasViewport } from "@/lib/canvasView";
 import { deriveEditorPhase, PHASE_LABELS } from "@/lib/editorPhase";
+import { toUserFacingError, type UserFacingError } from "@/lib/formatError";
+import {
+  formatInpaintLine,
+  formatSelectionLine,
+  type ModelLine,
+} from "@/lib/modelLabels";
 import { validateImageFile } from "@/lib/imageUpload";
 import {
   EditSessionHistory,
@@ -30,13 +37,28 @@ import type {
 } from "@/types/api";
 import { ControlPanel } from "@/components/ControlPanel";
 import { EditorCanvas } from "@/components/EditorCanvas";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { GenerationStatus } from "@/components/GenerationStatus";
 import { HistoryPanel } from "@/components/HistoryPanel";
+import { ModelStatusPanel } from "@/components/ModelStatusPanel";
 import { ResultPanel } from "@/components/ResultPanel";
 
 function revokeIfObjectUrl(url: string | null) {
   if (url && url.startsWith("blob:")) {
     URL.revokeObjectURL(url);
   }
+}
+
+function extractRouting(
+  metadata: Record<string, unknown> | undefined
+): { model?: string; backend?: string } | undefined {
+  const routing = metadata?.routing;
+  if (!routing || typeof routing !== "object") return undefined;
+  const record = routing as Record<string, unknown>;
+  return {
+    model: typeof record.model === "string" ? record.model : undefined,
+    backend: typeof record.backend === "string" ? record.backend : undefined,
+  };
 }
 
 export function ImageEditor() {
@@ -67,8 +89,15 @@ export function ImageEditor() {
   const [detections, setDetections] = useState<DetectionInfo[]>([]);
   const [detectionIndex, setDetectionIndex] = useState(0);
   const [status, setStatus] = useState<EditorStatus>("idle");
-  const [error, setError] = useState<string | null>(null);
+  const [userError, setUserError] = useState<UserFacingError | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [viewport, setViewport] = useState<CanvasViewport>(fitViewport());
+  const [selectionLine, setSelectionLine] = useState<ModelLine | null>(null);
+  const [inpaintLine, setInpaintLine] = useState<ModelLine | null>(null);
+  const [resultModel, setResultModel] = useState<string | undefined>();
+  const [resultBackend, setResultBackend] = useState<string | undefined>();
+  const [operationElapsedMs, setOperationElapsedMs] = useState(0);
+  const [lastRetry, setLastRetry] = useState<(() => void) | null>(null);
   const maskRef = useRef<Uint8Array | null>(null);
   const aiMaskRef = useRef<Uint8Array | null>(null);
   const maskHistoryRef = useRef(new MaskEditHistory());
@@ -80,12 +109,21 @@ export function ImageEditor() {
 
   const editorPhase = deriveEditorPhase({
     status,
-    error,
+    error: userError?.message ?? null,
     hasMask: Boolean(mask && maskHasInpaint(mask)),
     hasPendingResult,
     tool,
   });
   const phaseLabel = PHASE_LABELS[editorPhase];
+
+  const setError = useCallback((raw: unknown) => {
+    setUserError(toUserFacingError(raw));
+  }, []);
+
+  const clearError = useCallback(() => {
+    setUserError(null);
+    setLastRetry(null);
+  }, []);
 
   const syncMaskHistoryFlags = useCallback(() => {
     const history = maskHistoryRef.current;
@@ -146,6 +184,33 @@ export function ImageEditor() {
       setHasAiMask(Boolean(snapshot.aiMask));
       setResultUrl(snapshot.resultUrl);
       setLatencyMs(snapshot.inpaint?.latencyMs ?? null);
+      if (snapshot.inpaint) {
+        setResultModel(snapshot.inpaint.model);
+        setResultBackend(
+          typeof snapshot.inpaint.backend === "string"
+            ? snapshot.inpaint.backend
+            : undefined
+        );
+        setInpaintLine(
+          formatInpaintLine({
+            requestedBackend: snapshot.inpaint.backend,
+            model: snapshot.inpaint.model,
+            backend: snapshot.inpaint.backend,
+          })
+        );
+      }
+      if (snapshot.selection) {
+        setSelectionLine(
+          formatSelectionLine({
+            method: snapshot.selection.method,
+            model:
+              snapshot.selection.method === "text"
+                ? "grounding_dino"
+                : "sam2",
+            segmentationModel: "sam2",
+          })
+        );
+      }
       if (snapshot.selection?.prompt) {
         setTextPrompt(snapshot.selection.prompt);
       }
@@ -201,7 +266,7 @@ export function ImageEditor() {
       setResultUrl(null);
       setLatencyMs(null);
       setHasPendingResult(false);
-      setError(null);
+      clearError();
       setTool("select");
       setTextPrompt("");
       setEditInstruction("");
@@ -210,16 +275,60 @@ export function ImageEditor() {
       setShowMaskOverlay(true);
       setShowMaskOnly(false);
       setFeatherRadius(0);
+      setViewport(fitViewport());
+      setSelectionLine(null);
+      setInpaintLine(null);
+      setResultModel(undefined);
+      setResultBackend(undefined);
       const entry = sessionHistoryRef.current.reset(url);
       applySnapshot(entry);
     },
-    [applySnapshot, imageUrl]
+    [applySnapshot, clearError, imageUrl]
   );
+
+  const handleNewSession = useCallback(() => {
+    revokeIfObjectUrl(imageUrl);
+    sessionHistoryRef.current.dispose();
+    setImageFile(null);
+    setImageUrl(null);
+    setImageSize(null);
+    setMask(null);
+    maskRef.current = null;
+    aiMaskRef.current = null;
+    maskHistoryRef.current.clear();
+    lastSelectionMetaRef.current = undefined;
+    setHasAiMask(false);
+    setCanUndo(false);
+    setCanRedo(false);
+    setMaskPreview(null);
+    setResultUrl(null);
+    setLatencyMs(null);
+    setHasPendingResult(false);
+    clearError();
+    setTool("select");
+    setTextPrompt("");
+    setEditInstruction("");
+    setDetections([]);
+    setDetectionIndex(0);
+    setShowMaskOverlay(true);
+    setShowMaskOnly(false);
+    setFeatherRadius(0);
+    setViewport(fitViewport());
+    setSelectionLine(null);
+    setInpaintLine(null);
+    setResultModel(undefined);
+    setResultBackend(undefined);
+    setSessionEntries([]);
+    setSessionIndex(-1);
+    setCanSessionUndo(false);
+    setCanSessionRedo(false);
+    setStatus("idle");
+  }, [clearError, imageUrl]);
 
   const handleUpload = useCallback(
     async (file: File) => {
       setStatus("uploading");
-      setError(null);
+      clearError();
       try {
         const validated = await validateImageFile(file);
         const url = URL.createObjectURL(validated.file);
@@ -228,14 +337,12 @@ export function ImageEditor() {
           height: validated.height,
         });
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Could not load the selected image.";
-        setError(message);
+        setError(err);
       } finally {
         setStatus("idle");
       }
     },
-    [resetSession]
+    [clearError, resetSession]
   );
 
   const applyMaskFromBlob = useCallback(
@@ -270,7 +377,7 @@ export function ImageEditor() {
       return;
     }
     setStatus("grounding");
-    setError(null);
+    clearError();
     try {
       const { blob, metadata } = await selectByText(
         imageFile,
@@ -279,6 +386,14 @@ export function ImageEditor() {
       );
       setDetections(metadata.detections || []);
       setDetectionIndex(metadata.detection_index ?? 0);
+      setSelectionLine(
+        formatSelectionLine({
+          method: "text",
+          model: metadata.model,
+          groundingBackend: metadata.grounding_backend,
+          segmentationModel: metadata.segmentation_model,
+        })
+      );
       await applyMaskFromBlob(blob, {
         method: "text",
         prompt,
@@ -286,18 +401,21 @@ export function ImageEditor() {
         detectionIndex: metadata.detection_index,
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Text selection failed.";
-      setError(message);
+      setError(err);
+      setLastRetry(() => () => {
+        void handleFindObject();
+      });
     } finally {
       setStatus("idle");
     }
   }, [
     applyMaskFromBlob,
     busy,
+    clearError,
     detectionIndex,
     imageFile,
     imageSize,
+    setError,
     textPrompt,
   ]);
 
@@ -306,7 +424,7 @@ export function ImageEditor() {
       setDetectionIndex(index);
       if (!imageFile || !textPrompt.trim() || busy) return;
       setStatus("grounding");
-      setError(null);
+      clearError();
       try {
         const { blob, metadata } = await selectByText(
           imageFile,
@@ -314,6 +432,14 @@ export function ImageEditor() {
           index
         );
         setDetections(metadata.detections || []);
+        setSelectionLine(
+          formatSelectionLine({
+            method: "text",
+            model: metadata.model,
+            groundingBackend: metadata.grounding_backend,
+            segmentationModel: metadata.segmentation_model,
+          })
+        );
         await applyMaskFromBlob(blob, {
           method: "text",
           prompt: textPrompt.trim(),
@@ -321,33 +447,36 @@ export function ImageEditor() {
           detectionIndex: index,
         });
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Could not switch detection.";
-        setError(message);
+        setError(err);
       } finally {
         setStatus("idle");
       }
     },
-    [applyMaskFromBlob, busy, imageFile, textPrompt]
+    [applyMaskFromBlob, busy, clearError, imageFile, setError, textPrompt]
   );
 
   const handlePointSelect = useCallback(
     async (x: number, y: number) => {
       if (!imageFile || !imageSize || busy) return;
       setStatus("segmenting");
-      setError(null);
+      clearError();
       try {
-        const { blob } = await segment(imageFile, x, y);
+        const { blob, metadata } = await segment(imageFile, x, y);
+        setSelectionLine(
+          formatSelectionLine({
+            method: "point",
+            model: metadata.model,
+            backend: metadata.backend,
+          })
+        );
         await applyMaskFromBlob(blob, { method: "point" });
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Segmentation failed.";
-        setError(message);
+        setError(err);
       } finally {
         setStatus("idle");
       }
     },
-    [applyMaskFromBlob, busy, imageFile, imageSize]
+    [applyMaskFromBlob, busy, clearError, imageFile, imageSize, setError]
   );
 
   const recordMaskRefined = useCallback(
@@ -463,7 +592,7 @@ export function ImageEditor() {
       return;
     }
     setStatus("generating");
-    setError(null);
+    clearError();
     try {
       const maskBlob = await encodeMaskPng(
         maskRef.current,
@@ -471,10 +600,21 @@ export function ImageEditor() {
         imageSize.height
       );
       const { blob, metadata } = await inpaint(imageFile, maskBlob, backend);
+      const routing = extractRouting(metadata.metadata);
       const url = URL.createObjectURL(blob);
+      setResultModel(metadata.model);
+      setResultBackend(metadata.backend);
+      setInpaintLine(
+        formatInpaintLine({
+          requestedBackend: backend,
+          model: metadata.model,
+          backend: metadata.backend,
+          routing,
+        })
+      );
       recordSession({
         operation: "INPAINT",
-        label: "Moebius generated",
+        label: "Inpainting complete",
         mask: maskRef.current,
         aiMask: aiMaskRef.current,
         resultUrl: url,
@@ -486,13 +626,14 @@ export function ImageEditor() {
         },
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Inpainting failed.";
-      setError(message);
+      setError(err);
+      setLastRetry(() => () => {
+        void handleGenerate();
+      });
     } finally {
       setStatus("idle");
     }
-  }, [backend, busy, imageFile, imageSize, recordSession]);
+  }, [backend, busy, clearError, imageFile, imageSize, recordSession, setError]);
 
   const handleUseResult = useCallback(() => {
     if (!hasPendingResult || !resultUrl) return;
@@ -563,10 +704,19 @@ export function ImageEditor() {
       return;
     }
     setStatus("instruction_editing");
-    setError(null);
+    clearError();
     try {
       const { blob, metadata } = await editByInstruction(imageFile, instruction);
       const url = URL.createObjectURL(blob);
+      setResultModel(metadata.model);
+      setResultBackend(metadata.backend);
+      setInpaintLine(
+        formatInpaintLine({
+          requestedBackend: "instruct_pix2pix",
+          model: metadata.model,
+          backend: metadata.backend,
+        })
+      );
       recordSession({
         operation: "INPAINT",
         label: "Instruction edit",
@@ -580,19 +730,95 @@ export function ImageEditor() {
         },
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Instruction editing failed.";
-      setError(message);
+      setError(err);
     } finally {
       setStatus("idle");
     }
-  }, [busy, editInstruction, imageFile, recordSession]);
+  }, [busy, clearError, editInstruction, imageFile, recordSession, setError]);
 
   useEffect(() => {
     if (mask && imageSize) {
       updateMaskPreview(mask, imageSize);
     }
   }, [featherRadius, imageSize, mask, updateMaskPreview]);
+
+  useEffect(() => {
+    if (!busy) {
+      setOperationElapsedMs(0);
+      return;
+    }
+    const started = Date.now();
+    setOperationElapsedMs(0);
+    const timer = window.setInterval(() => {
+      setOperationElapsedMs(Date.now() - started);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [busy, status]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && event.key.toLowerCase() === "z" && !event.shiftKey) {
+        event.preventDefault();
+        if (canUndo) handleUndo();
+        else if (canSessionUndo) handleSessionUndo();
+        return;
+      }
+      if (mod && event.key.toLowerCase() === "z" && event.shiftKey) {
+        event.preventDefault();
+        if (canRedo) handleRedo();
+        else if (canSessionRedo) handleSessionRedo();
+        return;
+      }
+
+      if (busy) return;
+
+      if (event.key === "b" || event.key === "B") {
+        setTool("brush");
+        return;
+      }
+      if (event.key === "e" || event.key === "E") {
+        setTool("erase");
+        return;
+      }
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        setViewport((current) => zoomIn(current));
+        return;
+      }
+      if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        setViewport((current) => zoomOut(current));
+        return;
+      }
+      if (event.key === "0") {
+        event.preventDefault();
+        setViewport(fitViewport());
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    busy,
+    canRedo,
+    canSessionRedo,
+    canSessionUndo,
+    canUndo,
+    handleRedo,
+    handleSessionRedo,
+    handleSessionUndo,
+    handleUndo,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -618,32 +844,14 @@ export function ImageEditor() {
         </p>
       </header>
 
-      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <main
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            minWidth: 0,
-            padding: 20,
-            gap: 0,
-          }}
-        >
-          {error ? (
-            <div
-              role="alert"
-              style={{
-                marginBottom: 12,
-                padding: "10px 12px",
-                borderRadius: 6,
-                background: "#3f1d1d",
-                border: "1px solid #7f1d1d",
-                color: "#fecaca",
-                fontSize: 14,
-              }}
-            >
-              {error}
-            </div>
+      <div className="editor-layout" style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        <main className="editor-main" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, padding: 20, gap: 0 }}>
+          {userError ? (
+            <ErrorBanner
+              error={userError}
+              onDismiss={clearError}
+              onRetry={lastRetry ?? undefined}
+            />
           ) : null}
           <div
             aria-live="polite"
@@ -651,35 +859,24 @@ export function ImageEditor() {
               marginBottom: 12,
               padding: "8px 12px",
               borderRadius: 6,
-              background: editorPhase === "error" ? "#3f1d1d" : "#172554",
-              color: editorPhase === "error" ? "#fecaca" : "#bfdbfe",
+              background: editorPhase === "error" ? "#3f1d1d" : "#1a1d24",
+              border: "1px solid #2a2f3a",
+              color: editorPhase === "error" ? "#fecaca" : "#9aa3b2",
               fontSize: 13,
             }}
           >
-            Status: {phaseLabel}
+            {phaseLabel}
           </div>
+
+          <ModelStatusPanel selection={selectionLine} inpainting={inpaintLine} />
+
           {busy ? (
-            <div
-              aria-live="polite"
-              style={{
-                marginBottom: 12,
-                padding: "8px 12px",
-                borderRadius: 6,
-                background: "#172554",
-                color: "#bfdbfe",
-                fontSize: 13,
-              }}
-            >
-              {status === "uploading"
-                ? "Uploading image…"
-                : status === "segmenting"
-                  ? "Segmenting…"
-                  : status === "grounding"
-                    ? "Finding object…"
-                    : status === "instruction_editing"
-                      ? "Applying instruction…"
-                      : "Generating result…"}
-            </div>
+            <GenerationStatus
+              status={status}
+              backend={status === "generating" ? backend : undefined}
+              model={resultModel}
+              elapsedMs={operationElapsedMs}
+            />
           ) : null}
 
           <EditorCanvas
@@ -693,6 +890,8 @@ export function ImageEditor() {
             showOverlay={showMaskOverlay}
             showMaskOnly={showMaskOnly}
             disabled={busy || !imageUrl}
+            viewport={viewport}
+            onViewportChange={setViewport}
             onPointSelect={handlePointSelect}
             onBrushStroke={handleBrushStroke}
             onStrokeStart={handleStrokeStart}
@@ -723,10 +922,15 @@ export function ImageEditor() {
               featherRadius > 0 ? "Edited mask (feather preview)" : "Edited mask"
             }
             hasAiMask={hasAiMask}
+            resultModel={resultModel}
+            resultBackend={resultBackend}
+            requestedBackend={backend}
           />
         </main>
 
         <ControlPanel
+          hasImage={Boolean(imageUrl)}
+          onNewSession={handleNewSession}
           tool={tool}
           backend={backend}
           onBackendChange={setBackend}

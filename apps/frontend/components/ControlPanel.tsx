@@ -3,6 +3,8 @@
 import type { DetectionInfo, EditorTool, InpaintBackend } from "@/types/api";
 
 interface ControlPanelProps {
+  hasImage: boolean;
+  onNewSession: () => void;
   tool: EditorTool;
   backend: InpaintBackend;
   onBackendChange: (backend: InpaintBackend) => void;
@@ -45,6 +47,8 @@ interface ControlPanelProps {
 }
 
 export function ControlPanel({
+  hasImage,
+  onNewSession,
   tool,
   backend,
   onBackendChange,
@@ -88,6 +92,7 @@ export function ControlPanel({
   return (
     <aside
       aria-label="Editor controls"
+      className="editor-sidebar"
       style={{
         width: 300,
         flexShrink: 0,
@@ -101,6 +106,21 @@ export function ControlPanel({
         maxHeight: "100vh",
       }}
     >
+      <section>
+        <h2 style={sectionTitleStyle}>Session</h2>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onNewSession}
+          style={secondaryButtonStyle}
+        >
+          New image / New session
+        </button>
+        {hasImage ? (
+          <p style={hintStyle}>Clears the current image, mask, result, and history.</p>
+        ) : null}
+      </section>
+
       <section>
         <h2 style={sectionTitleStyle}>Upload Image</h2>
         <label style={labelStyle}>
@@ -170,7 +190,7 @@ export function ControlPanel({
           </button>
         </div>
         <p style={hintStyle}>
-          Text finds an object; click segments on the image. AI mask is stored separately from edits.
+          Shortcuts: B brush · E eraser · +/- zoom · 0 fit · Cmd/Ctrl+Z undo
         </p>
       </section>
 

@@ -39,6 +39,33 @@ a {
   color: #7dd3fc;
 }
 
+@media (max-width: 960px) {
+  .editor-layout {
+    flex-direction: column !important;
+  }
+
+  .editor-sidebar {
+    width: 100% !important;
+    max-height: none !important;
+    border-left: none !important;
+    border-top: 1px solid #2a2f3a;
+  }
+
+  .editor-main {
+    padding: 12px !important;
+  }
+
+  .result-grid-side {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+.result-grid-side {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
