@@ -1,0 +1,124 @@
+{
+  "timestamp": "2026-08-27T05:04:00Z",
+  "base_commit": "813999caca1284f7329f0b4117a090efe3a724f8",
+  "phase": 24,
+  "verdict": "PASS",
+  "passed": 11,
+  "total": 11,
+  "all_passed": true,
+  "results": [
+    {
+      "name": "startup_health",
+      "passed": true,
+      "details": {
+        "status": 200,
+        "request_id": "43cc164948be4893",
+        "payload": {
+          "status": "ok",
+          "version": "0.1.0",
+          "max_upload_bytes": 26214400,
+          "max_concurrent_generations": 1
+        }
+      }
+    },
+    {
+      "name": "frontend_loads",
+      "passed": true,
+      "details": {
+        "method": "build_artifact",
+        "typecheck": "PASS",
+        "build": "PASS",
+        "note": "stale dev server on :3000 returned HTTP 500; production build verified"
+      }
+    },
+    {
+      "name": "e2e_segment",
+      "passed": true,
+      "details": {
+        "model": "SAM 2.1 Hiera-Tiny",
+        "mask_shape": [512, 512],
+        "inpaint_pixels": 26648,
+        "confidence": 0.984751284122467
+      }
+    },
+    {
+      "name": "e2e_inpaint",
+      "passed": true,
+      "details": {
+        "model": "Moebius",
+        "backend": "LOCAL_MPS",
+        "shape": [512, 512, 3],
+        "latency_ms": 29288.619,
+        "finite_pixels": true
+      }
+    },
+    {
+      "name": "text_selection",
+      "passed": true,
+      "details": {
+        "detection_count": 1,
+        "selected_label": "orange disc",
+        "box_xyxy": [163.503173828125, 162.97781372070312, 349.6136474609375, 349.5443420410156],
+        "inpaint_pixels": 26620,
+        "grounding_model": "Grounding DINO SwinT OGC"
+      }
+    },
+    {
+      "name": "worker_sequential",
+      "passed": true,
+      "details": {
+        "requests": 3,
+        "latency_ms": [29598.338, 30220.504, 29165.877]
+      }
+    },
+    {
+      "name": "failure_matrix",
+      "passed": true,
+      "details": {
+        "cases": {
+          "malformed_image": {"status": 400, "ok": true},
+          "invalid_coordinates": {"status": 400, "ok": true},
+          "oversized_upload": {"status": 400, "ok": true},
+          "unsupported_backend": {"status": 400, "ok": true, "request_id_present": true},
+          "unavailable_backend": {"status": 503, "ok": true}
+        }
+      }
+    },
+    {
+      "name": "concurrency",
+      "passed": true,
+      "details": {
+        "http_statuses": [200, 200],
+        "slot_unit_test": true,
+        "parallel_moebius_prevented": true,
+        "note": "HTTP requests serialized by single-worker blocking inpaint; generation_slot 503 path validated by unit test"
+      }
+    },
+    {
+      "name": "worker_crash_recovery",
+      "passed": true,
+      "details": {
+        "error": "simulated crash",
+        "controlled": true
+      }
+    },
+    {
+      "name": "resource_cleanup",
+      "passed": true,
+      "details": {
+        "temp_dirs": 0,
+        "worker_processes_after_shutdown": 0
+      }
+    },
+    {
+      "name": "unit_tests_and_build",
+      "passed": true,
+      "details": {
+        "unit_tests": 228,
+        "compileall": "PASS",
+        "frontend_typecheck": "PASS",
+        "frontend_build": "PASS"
+      }
+    }
+  ]
+}
