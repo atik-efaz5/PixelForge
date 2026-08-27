@@ -15,7 +15,7 @@ from models.errors import (
     ModelUnavailableError,
     PixelForgeModelError,
 )
-from pipelines.errors import PipelineBackendError, PipelineValidationError
+from pipelines.errors import PipelineBackendError, PipelinePromptError, PipelineValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,13 @@ def error_body(code: str, message: str, **extra: Any) -> dict[str, Any]:
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(InvalidInputError)
     async def _invalid_input(_request: Request, exc: InvalidInputError) -> JSONResponse:
+        return JSONResponse(
+            status_code=400,
+            content=error_body("invalid_input", str(exc)),
+        )
+
+    @app.exception_handler(PipelinePromptError)
+    async def _pipeline_prompt(_request: Request, exc: PipelinePromptError) -> JSONResponse:
         return JSONResponse(
             status_code=400,
             content=error_body("invalid_input", str(exc)),

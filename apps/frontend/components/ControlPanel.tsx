@@ -1,6 +1,6 @@
 "use client";
 
-import type { EditorTool, InpaintBackend } from "@/types/api";
+import type { DetectionInfo, EditorTool, InpaintBackend } from "@/types/api";
 
 interface ControlPanelProps {
   tool: EditorTool;
@@ -8,11 +8,17 @@ interface ControlPanelProps {
   brushRadius: number;
   busy: boolean;
   canGenerate: boolean;
+  textPrompt: string;
+  detections: DetectionInfo[];
+  detectionIndex: number;
   onUpload: (file: File) => void;
   onToolChange: (tool: EditorTool) => void;
   onBrushRadiusChange: (radius: number) => void;
   onClearMask: () => void;
   onGenerate: () => void;
+  onTextPromptChange: (value: string) => void;
+  onFindObject: () => void;
+  onDetectionIndexChange: (index: number) => void;
 }
 
 export function ControlPanel({
@@ -21,11 +27,17 @@ export function ControlPanel({
   brushRadius,
   busy,
   canGenerate,
+  textPrompt,
+  detections,
+  detectionIndex,
   onUpload,
   onToolChange,
   onBrushRadiusChange,
   onClearMask,
   onGenerate,
+  onTextPromptChange,
+  onFindObject,
+  onDetectionIndexChange,
 }: ControlPanelProps) {
   return (
     <aside
@@ -60,7 +72,43 @@ export function ControlPanel({
 
       <section>
         <h2 style={sectionTitleStyle}>Selection</h2>
-        <div style={buttonRowStyle}>
+        <label style={labelStyle}>
+          Select object
+          <input
+            type="text"
+            value={textPrompt}
+            disabled={busy}
+            placeholder="dog, red car, person..."
+            onChange={(event) => onTextPromptChange(event.target.value)}
+            style={{ width: "100%", marginTop: 6, padding: "8px 10px" }}
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy || !textPrompt.trim()}
+          onClick={onFindObject}
+          style={{ ...secondaryButtonStyle, marginTop: 8 }}
+        >
+          Find Object
+        </button>
+        {detections.length > 1 ? (
+          <label style={{ ...labelStyle, marginTop: 10 }}>
+            Detection
+            <select
+              value={detectionIndex}
+              disabled={busy}
+              onChange={(event) => onDetectionIndexChange(Number(event.target.value))}
+              style={{ width: "100%", marginTop: 6 }}
+            >
+              {detections.map((det) => (
+                <option key={det.index} value={det.index}>
+                  {det.label} ({det.confidence.toFixed(2)})
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <div style={{ ...buttonRowStyle, marginTop: 10 }}>
           <button
             type="button"
             aria-pressed={tool === "select"}
@@ -71,7 +119,9 @@ export function ControlPanel({
             Click object
           </button>
         </div>
-        <p style={hintStyle}>Click on the object you want to remove or edit.</p>
+        <p style={hintStyle}>
+          Enter text to find an object, or click directly on the image.
+        </p>
       </section>
 
       <section>

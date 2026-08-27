@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
+from models.adapters.grounding_dino_adapter import GroundingDINOAdapter
 from models.adapters.moebius_adapter import MoebiusAdapter
 from models.adapters.pixelhacker_adapter import PixelHackerAdapter
 from models.adapters.sam2_adapter import SAM2Adapter
@@ -31,18 +32,23 @@ class TestAdapterRegistry(unittest.TestCase):
             os.environ["PIXELFORGE_PIXELHACKER_ENDPOINT"] = self._endpoint_env
 
     def test_known_models(self) -> None:
-        self.assertEqual(known_models(), ("sam2", "moebius", "pixelhacker"))
+        self.assertEqual(
+            known_models(), ("sam2", "moebius", "pixelhacker", "grounding_dino")
+        )
 
     def test_registry_lookup(self) -> None:
         sam2 = get_adapter("sam2")
         moebius = get_adapter("moebius")
         pixelhacker = get_adapter("pixelhacker")
+        grounding_dino = get_adapter("grounding_dino")
         self.assertEqual(sam2.model_name, "SAM 2.1 Hiera-Tiny")
         self.assertIs(sam2.backend_type, BackendType.LOCAL_MPS)
         self.assertEqual(moebius.model_name, "Moebius")
         self.assertIs(moebius.backend_type, BackendType.LOCAL_MPS)
         self.assertEqual(pixelhacker.model_name, "PixelHacker")
         self.assertIs(pixelhacker.backend_type, BackendType.CLOUD_GPU)
+        self.assertEqual(grounding_dino.model_name, "Grounding DINO SwinT OGC")
+        self.assertIs(grounding_dino.backend_type, BackendType.CPU)
 
     def test_registry_is_case_insensitive_and_cached(self) -> None:
         self.assertIs(get_adapter("SAM2"), get_adapter("sam2"))
@@ -55,6 +61,7 @@ class TestAdapterRegistry(unittest.TestCase):
         get_adapter("sam2")
         get_adapter("moebius")
         get_adapter("pixelhacker")
+        get_adapter("grounding_dino")
         leaked = [
             name
             for name in sys.modules
@@ -150,6 +157,16 @@ class TestAdapterRegistry(unittest.TestCase):
         self.assertEqual(payload["num_steps"], 20)
         self.assertEqual(payload["guidance_scale"], 4.5)
         self.assertFalse(payload["paste"])
+
+    def test_grounding_dino_unavailable_without_checkpoint(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        adapter = GroundingDINOAdapter(
+            checkpoint_path=tmp / "missing.pth",
+            config_file=tmp / "config.py",
+            upstream_dir=tmp,
+        )
+        self.assertFalse(adapter.is_available())
+        self.assertIs(adapter.backend_type, BackendType.CPU)
 
 
 if __name__ == "__main__":

@@ -55,3 +55,20 @@ class RemoveObjectMetadata(BaseModel):
     segmentation_ms: float | None = None
     inpainting_ms: float | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SelectByTextMetadata(BaseModel):
+    """JSON metadata for ``POST /select-by-text``. Mask pixels are returned as PNG."""
+
+    prompt: str
+    model: str
+    segmentation_model: str
+    grounding_backend: str
+    confidence: float | None
+    method: str
+    detection_index: int
+    detection_count: int
+    selected_label: str
+    selected_box_xyxy: list[float]
+    detections: list[dict[str, Any]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)

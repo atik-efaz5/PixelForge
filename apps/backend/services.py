@@ -12,7 +12,7 @@ from fastapi import UploadFile
 from PIL import Image
 
 from apps.backend.errors import InvalidInputError
-from apps.backend.isolated_runner import inpaint_via_isolated_env
+from apps.backend.isolated_runner import ground_via_isolated_env, inpaint_via_isolated_env
 from models.errors import ModelLoadError
 from models.registry import get_adapter, known_models
 from models.types import (
@@ -20,6 +20,7 @@ from models.types import (
     InpaintParams,
     InpaintingResult,
     SegmentationResult,
+    TextSelectionResult,
     pil_rgb_to_array,
     validate_image,
     validate_mask,
@@ -53,7 +54,12 @@ class ImageEditingService:
         entries: list[dict[str, Any]] = []
         for model_id in known_models():
             adapter = get_adapter(model_id)
-            role = "segmentation" if model_id == "sam2" else "inpainting"
+            if model_id == "sam2":
+                role = "segmentation"
+            elif model_id == "grounding_dino":
+                role = "grounding"
+            else:
+                role = "inpainting"
             entries.append(
                 {
                     "id": model_id,
@@ -87,6 +93,37 @@ class ImageEditingService:
                 raise
             logger.warning("in-process Moebius load failed; using isolated env: %s", exc)
             return inpaint_via_isolated_env(image, mask, params=params)
+
+    def select_by_text(
+        self,
+        image: np.ndarray,
+        text_prompt: str,
+        *,
+        detection_index: int = 0,
+        grounding_backend: str = "grounding_dino",
+    ) -> TextSelectionResult:
+        logger.info(
+            "service_select_by_text prompt=%r detection_index=%d",
+            text_prompt,
+            detection_index,
+        )
+        try:
+            return self._pipeline.select_by_text(
+                image,
+                text_prompt,
+                detection_index=detection_index,
+                grounding_backend=grounding_backend,
+            )
+        except ModelLoadError as exc:
+            if grounding_backend.strip().lower() != "grounding_dino":
+                raise
+            logger.warning(
+                "in-process Grounding DINO load failed; using isolated env: %s", exc
+            )
+            grounding = ground_via_isolated_env(image, text_prompt)
+            return self._pipeline.select_from_grounding(
+                image, grounding, detection_index=detection_index
+            )
 
     def remove_object(
         self,

@@ -106,6 +106,46 @@ class SegmentationResult:
 
 
 @dataclass
+class BoundingBox:
+    """Axis-aligned box in source-image pixel coordinates (XYXY)."""
+
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    confidence: float
+    label: str
+
+    def as_xyxy_int(self) -> tuple[int, int, int, int]:
+        return int(self.x1), int(self.y1), int(self.x2), int(self.y2)
+
+
+@dataclass
+class GroundingResult:
+    """Open-vocabulary detections for a text prompt."""
+
+    detections: list[BoundingBox]
+    model: str
+    prompt: str
+    backend: BackendType
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class TextSelectionResult:
+    """Mask produced from text grounding + box segmentation."""
+
+    mask: MaskArray
+    segmentation: SegmentationResult
+    grounding: GroundingResult
+    selected_detection: BoundingBox
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.mask = validate_mask(self.mask)
+
+
+@dataclass
 class InpaintParams:
     """Optional inpainting knobs. ``None`` fields use the adapter's upstream defaults."""
 

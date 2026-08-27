@@ -7,3 +7,7 @@ class PipelineValidationError(ValueError):
 
 class PipelineBackendError(ValueError):
     """Unsupported or unavailable inpainting backend was requested explicitly."""
+
+
+class PipelinePromptError(ValueError):
+    """Invalid or empty text prompt."""

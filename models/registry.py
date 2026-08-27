@@ -17,6 +17,7 @@ _INSTANCES: dict[str, ModelAdapter] = {}
 def _factories() -> dict[str, Callable[[], ModelAdapter]]:
     global _FACTORIES
     if _FACTORIES is None:
+        from models.adapters.grounding_dino_adapter import GroundingDINOAdapter
         from models.adapters.moebius_adapter import MoebiusAdapter
         from models.adapters.pixelhacker_adapter import PixelHackerAdapter
         from models.adapters.sam2_adapter import SAM2Adapter
@@ -25,6 +26,7 @@ def _factories() -> dict[str, Callable[[], ModelAdapter]]:
             "sam2": SAM2Adapter,
             "moebius": MoebiusAdapter,
             "pixelhacker": PixelHackerAdapter,
+            "grounding_dino": GroundingDINOAdapter,
         }
     return _FACTORIES
 

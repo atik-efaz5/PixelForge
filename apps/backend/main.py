@@ -17,6 +17,7 @@ from apps.backend.schemas import (
     ModelInfo,
     RemoveObjectMetadata,
     SegmentMetadata,
+    SelectByTextMetadata,
 )
 from apps.backend.services import (
     ImageEditingService,
@@ -199,6 +200,57 @@ def build_router():
         headers["Content-Disposition"] = 'inline; filename="result.png"'
         return Response(
             content=image_to_png_bytes(result.result),
+            media_type="image/png",
+            headers=headers,
+        )
+
+    @router.post("/select-by-text")
+    async def select_by_text(
+        service: Annotated[ImageEditingService, Depends(get_editing_service)],
+        image: UploadFile = File(..., description="RGB image."),
+        prompt: str = Form(..., description="Object description, e.g. dog or red car."),
+        detection_index: int = Form(0, description="Which detection to segment when multiple."),
+        grounding_backend: str = Form("grounding_dino"),
+    ) -> Response:
+        rgb = await decode_upload_image(image)
+        result = service.select_by_text(
+            rgb,
+            prompt,
+            detection_index=detection_index,
+            grounding_backend=grounding_backend,
+        )
+        detections = [
+            {
+                "index": idx,
+                "label": det.label,
+                "confidence": det.confidence,
+                "box_xyxy": [det.x1, det.y1, det.x2, det.y2],
+            }
+            for idx, det in enumerate(result.grounding.detections)
+        ]
+        box = result.selected_detection
+        meta = SelectByTextMetadata(
+            prompt=result.grounding.prompt,
+            model=result.grounding.model,
+            segmentation_model=result.segmentation.model,
+            grounding_backend=result.grounding.backend.value,
+            confidence=result.segmentation.confidence,
+            method=result.segmentation.method,
+            detection_index=result.metadata.get("detection_index", detection_index),
+            detection_count=len(result.grounding.detections),
+            selected_label=box.label,
+            selected_box_xyxy=[box.x1, box.y1, box.x2, box.y2],
+            detections=detections,
+            metadata={
+                **result.metadata,
+                **result.grounding.metadata,
+                **result.segmentation.metadata,
+            },
+        )
+        headers = png_response_headers(meta.model_dump())
+        headers["Content-Disposition"] = 'inline; filename="mask.png"'
+        return Response(
+            content=mask_to_png_bytes(result.mask),
             media_type="image/png",
             headers=headers,
         )

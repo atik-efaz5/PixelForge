@@ -9,6 +9,7 @@
 #   PIXELFORGE_MOEBIUS_CHECKPOINT
 #   PIXELFORGE_MOEBIUS_VAE
 #   PIXELFORGE_PIXELHACKER_ENDPOINT
+#   PIXELFORGE_GROUNDING_DINO_CHECKPOINT
 
 models:
   sam2:
@@ -43,3 +44,16 @@ models:
     upstream_dir: research/upstream/PixelHacker
     # Empty until a cloud worker exists. Set PIXELFORGE_PIXELHACKER_ENDPOINT.
     endpoint: ""
+
+  grounding_dino:
+    model_id: groundingdino_swint_ogc
+    display_name: Grounding DINO SwinT OGC
+    backend: CPU
+    enabled: true
+    environment: pixelforge-grounding-dino
+    checkpoint: checkpoints/grounding_dino/groundingdino_swint_ogc.pth
+    config_file: research/upstream/Grounded-Segment-Anything/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py
+    upstream_dir: research/upstream/Grounded-Segment-Anything
+    device: cpu
+    box_threshold: 0.3
+    text_threshold: 0.25

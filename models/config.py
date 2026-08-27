@@ -93,4 +93,17 @@ _DEFAULTS: dict[str, dict[str, Any]] = {
         "upstream_dir": "research/upstream/PixelHacker",
         "endpoint": "",
     },
+    "grounding_dino": {
+        "model_id": "groundingdino_swint_ogc",
+        "display_name": "Grounding DINO SwinT OGC",
+        "backend": "CPU",
+        "enabled": True,
+        "environment": "pixelforge-grounding-dino",
+        "checkpoint": "checkpoints/grounding_dino/groundingdino_swint_ogc.pth",
+        "config_file": "research/upstream/Grounded-Segment-Anything/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py",
+        "upstream_dir": "research/upstream/Grounded-Segment-Anything",
+        "device": "cpu",
+        "box_threshold": 0.3,
+        "text_threshold": 0.25,
+    },
 }

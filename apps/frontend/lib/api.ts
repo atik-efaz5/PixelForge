@@ -6,6 +6,7 @@ import type {
   ModelsResponse,
   PngWithMetadata,
   RemoveObjectMetadata,
+  SelectByTextMetadata,
   SegmentMetadata,
 } from "@/types/api";
 
@@ -27,15 +28,22 @@ function parseHeaderMetadata<T extends object>(
   for (const field of fields) {
     const raw = headers.get(pfHeaderKey(String(field)));
     if (raw === null || raw === "") continue;
-    if (field === "metadata") {
+    if (field === "metadata" || field === "detections" || field === "selected_box_xyxy") {
       try {
         (meta as Record<string, unknown>)[field as string] = JSON.parse(raw);
       } catch {
-        (meta as Record<string, unknown>)[field as string] = {};
+        (meta as Record<string, unknown>)[field as string] =
+          field === "detections" ? [] : field === "selected_box_xyxy" ? [] : {};
       }
       continue;
     }
-    if (field === "confidence" || field === "latency_ms" || field === "memory_mb") {
+    if (
+      field === "confidence" ||
+      field === "latency_ms" ||
+      field === "memory_mb" ||
+      field === "detection_index" ||
+      field === "detection_count"
+    ) {
       const num = Number(raw);
       (meta as Record<string, unknown>)[field as string] = Number.isFinite(num)
         ? num
@@ -135,6 +143,38 @@ export async function inpaint(
     "backend",
     "latency_ms",
     "memory_mb",
+    "metadata",
+  ]);
+}
+
+export async function selectByText(
+  image: File,
+  prompt: string,
+  detectionIndex = 0
+): Promise<PngWithMetadata<SelectByTextMetadata>> {
+  const form = new FormData();
+  form.append("image", image, image.name || "image.png");
+  form.append("prompt", prompt);
+  form.append("detection_index", String(detectionIndex));
+  form.append("grounding_backend", "grounding_dino");
+
+  const response = await fetch(`${apiBaseUrl()}/select-by-text`, {
+    method: "POST",
+    body: form,
+  });
+
+  return readPngResponse<SelectByTextMetadata>(response, [
+    "prompt",
+    "model",
+    "segmentation_model",
+    "grounding_backend",
+    "confidence",
+    "method",
+    "detection_index",
+    "detection_count",
+    "selected_label",
+    "selected_box_xyxy",
+    "detections",
     "metadata",
   ]);
 }

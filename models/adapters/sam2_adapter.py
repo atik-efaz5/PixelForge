@@ -147,6 +147,12 @@ class SAM2Adapter(SegmentationAdapter):
         """Click-prompted mask. ``(x, y)`` are pixel coordinates, origin top-left."""
         return self.infer(image, x, y)
 
+    def segment_box(
+        self, image: np.ndarray, x1: int, y1: int, x2: int, y2: int
+    ) -> SegmentationResult:
+        """Box-prompted mask. Coordinates are pixel XYXY, origin top-left."""
+        return self._segment_box(image, x1, y1, x2, y2)
+
     def infer(self, image: np.ndarray, x: int, y: int, /) -> SegmentationResult:
         image = validate_image(image)
         if not self._loaded:
@@ -190,6 +196,58 @@ class SAM2Adapter(SegmentationAdapter):
             metadata={
                 "prompt_xy": [int(x), int(y)],
                 "prompt_label": 1,
+                "device": "mps",
+                "checkpoint": str(self._checkpoint),
+                "latency_ms": round(latency_ms, 3),
+                "memory_mb": mps_memory_mb(),
+                "project_root": str(project_root()),
+            },
+        )
+
+    def _segment_box(
+        self, image: np.ndarray, x1: int, y1: int, x2: int, y2: int
+    ) -> SegmentationResult:
+        image = validate_image(image)
+        if not self._loaded:
+            self.load()
+        if self._predictor is None:
+            raise ModelLoadError("SAM 2 is not loaded.")
+
+        h, w = image.shape[:2]
+        if x2 <= x1 or y2 <= y1:
+            raise ModelInferenceError("Box must have positive width and height.")
+        box = np.array(
+            [max(0, x1), max(0, y1), min(w - 1, x2), min(h - 1, y2)],
+            dtype=np.float32,
+        )
+        t0 = time.perf_counter()
+        try:
+            self._predictor.set_image(image)
+            masks, scores, _low_res = self._predictor.predict(
+                point_coords=None,
+                point_labels=None,
+                box=box,
+                multimask_output=False,
+            )
+            mps_synchronize()
+        except Exception as exc:
+            self._error = type(exc).__name__
+            raise ModelInferenceError("SAM 2 box segmentation failed.") from exc
+
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+        mask = np.asarray(masks[0]).astype(bool)
+        if mask.shape != (h, w):
+            raise ModelInferenceError(
+                f"SAM 2 mask shape {mask.shape} does not match image {(h, w)}."
+            )
+        confidence = float(np.atleast_1d(scores)[0])
+        return SegmentationResult(
+            mask=mask,
+            confidence=confidence,
+            model=self.model_name,
+            method="box",
+            metadata={
+                "prompt_box_xyxy": [int(x1), int(y1), int(x2), int(y2)],
                 "device": "mps",
                 "checkpoint": str(self._checkpoint),
                 "latency_ms": round(latency_ms, 3),

@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from typing import Any, ClassVar
 
 from models.errors import ModelLoadError
-from models.types import BackendType, ModelStatus
+from models.types import BackendType, ModelStatus, SegmentationResult
 
 
 class ModelAdapter(ABC):
@@ -96,6 +96,22 @@ class SegmentationAdapter(ModelAdapter):
     @abstractmethod
     def infer(self, image, x: int, y: int, /):
         """Point-prompted segmentation. See :meth:`SAM2Adapter.segment_point`."""
+
+    def segment_box(
+        self, image, x1: int, y1: int, x2: int, y2: int, /
+    ) -> SegmentationResult:
+        """Box-prompted segmentation when supported by the adapter."""
+        raise NotImplementedError(
+            f"{self.model_name} does not support box segmentation."
+        )
+
+
+class GroundingAdapter(ModelAdapter):
+    """Adapter that maps a text prompt to bounding boxes on an image."""
+
+    @abstractmethod
+    def infer(self, image, text_prompt: str, /):
+        """Ground ``text_prompt`` on ``image``. See :meth:`GroundingDINOAdapter.ground`."""
 
 
 class InpaintingAdapter(ModelAdapter):

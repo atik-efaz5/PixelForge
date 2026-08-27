@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { inpaint, segment } from "@/lib/api";
+import { inpaint, segment, selectByText } from "@/lib/api";
 import {
   createEmptyMask,
   decodeMaskPng,
@@ -10,7 +10,13 @@ import {
   maskPreviewUrl,
   paintBrush,
 } from "@/lib/mask";
-import type { EditorTool, ImageDimensions, InpaintBackend } from "@/types/api";
+import type {
+  DetectionInfo,
+  EditorStatus,
+  EditorTool,
+  ImageDimensions,
+  InpaintBackend,
+} from "@/types/api";
 import { ControlPanel } from "@/components/ControlPanel";
 import { EditorCanvas } from "@/components/EditorCanvas";
 import { ResultPanel } from "@/components/ResultPanel";
@@ -31,7 +37,10 @@ export function ImageEditor() {
   const [tool, setTool] = useState<EditorTool>("select");
   const [brushRadius, setBrushRadius] = useState(24);
   const [backend] = useState<InpaintBackend>("moebius");
-  const [status, setStatus] = useState<"idle" | "segmenting" | "generating">("idle");
+  const [textPrompt, setTextPrompt] = useState("");
+  const [detections, setDetections] = useState<DetectionInfo[]>([]);
+  const [detectionIndex, setDetectionIndex] = useState(0);
+  const [status, setStatus] = useState<EditorStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const maskRef = useRef<Uint8Array | null>(null);
@@ -63,6 +72,9 @@ export function ImageEditor() {
       setLatencyMs(null);
       setError(null);
       setTool("select");
+      setTextPrompt("");
+      setDetections([]);
+      setDetectionIndex(0);
     },
     [imageUrl, resultUrl]
   );
@@ -83,6 +95,77 @@ export function ImageEditor() {
     [resetSession]
   );
 
+  const applyMaskFromBlob = useCallback(
+    async (blob: Blob) => {
+      if (!imageSize) return;
+      const decoded = await decodeMaskPng(blob, imageSize);
+      maskRef.current = decoded;
+      setMask(decoded);
+      updateMaskPreview(decoded, imageSize);
+      setTool("brush");
+    },
+    [imageSize, updateMaskPreview]
+  );
+
+  const handleFindObject = useCallback(async () => {
+    if (!imageFile || !imageSize || busy) return;
+    const prompt = textPrompt.trim();
+    if (!prompt) {
+      setError("Enter an object description to search.");
+      return;
+    }
+    setStatus("grounding");
+    setError(null);
+    try {
+      const { blob, metadata } = await selectByText(
+        imageFile,
+        prompt,
+        detectionIndex
+      );
+      setDetections(metadata.detections || []);
+      setDetectionIndex(metadata.detection_index ?? 0);
+      await applyMaskFromBlob(blob);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Text selection failed.";
+      setError(message);
+    } finally {
+      setStatus("idle");
+    }
+  }, [
+    applyMaskFromBlob,
+    busy,
+    detectionIndex,
+    imageFile,
+    imageSize,
+    textPrompt,
+  ]);
+
+  const handleDetectionIndexChange = useCallback(
+    async (index: number) => {
+      setDetectionIndex(index);
+      if (!imageFile || !textPrompt.trim() || busy) return;
+      setStatus("grounding");
+      setError(null);
+      try {
+        const { blob, metadata } = await selectByText(
+          imageFile,
+          textPrompt.trim(),
+          index
+        );
+        setDetections(metadata.detections || []);
+        await applyMaskFromBlob(blob);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Could not switch detection.";
+        setError(message);
+      } finally {
+        setStatus("idle");
+      }
+    },
+    [applyMaskFromBlob, busy, imageFile, textPrompt]
+  );
+
   const handlePointSelect = useCallback(
     async (x: number, y: number) => {
       if (!imageFile || !imageSize || busy) return;
@@ -90,11 +173,7 @@ export function ImageEditor() {
       setError(null);
       try {
         const { blob } = await segment(imageFile, x, y);
-        const decoded = await decodeMaskPng(blob, imageSize);
-        maskRef.current = decoded;
-        setMask(decoded);
-        updateMaskPreview(decoded, imageSize);
-        setTool("brush");
+        await applyMaskFromBlob(blob);
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Segmentation failed.";
@@ -103,7 +182,7 @@ export function ImageEditor() {
         setStatus("idle");
       }
     },
-    [busy, imageFile, imageSize, updateMaskPreview]
+    [applyMaskFromBlob, busy, imageFile, imageSize]
   );
 
   const handleBrushStroke = useCallback(
@@ -217,7 +296,11 @@ export function ImageEditor() {
                 fontSize: 13,
               }}
             >
-              {status === "segmenting" ? "Segmenting…" : "Generating result…"}
+              {status === "segmenting"
+                ? "Segmenting…"
+                : status === "grounding"
+                  ? "Finding object…"
+                  : "Generating result…"}
             </div>
           ) : null}
 
@@ -246,11 +329,17 @@ export function ImageEditor() {
           brushRadius={brushRadius}
           busy={busy}
           canGenerate={Boolean(imageFile && mask && maskHasInpaint(mask))}
+          textPrompt={textPrompt}
+          detections={detections}
+          detectionIndex={detectionIndex}
           onUpload={handleUpload}
           onToolChange={setTool}
           onBrushRadiusChange={setBrushRadius}
           onClearMask={handleClearMask}
           onGenerate={handleGenerate}
+          onTextPromptChange={setTextPrompt}
+          onFindObject={handleFindObject}
+          onDetectionIndexChange={handleDetectionIndexChange}
         />
       </div>
     </div>
