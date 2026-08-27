@@ -1,0 +1,883 @@
+{
+  "benchmark_id": "mvp_local_benchmark_v1",
+  "phase": "16",
+  "status": "COMPLETE",
+  "timestamp_utc": "2026-08-27T01:07:51.802769+00:00",
+  "pixelforge_commit": "74112c2da79e284bbbd977092107cd3bc6b2cb23",
+  "hardware": {
+    "platform": "macOS-15.7.9-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "processor": "Apple M3 Pro",
+    "physical_cores": "11",
+    "logical_cores": "11",
+    "unified_memory_bytes": "19327352832"
+  },
+  "environments": {
+    "sam2": {
+      "conda_env": "pixelforge-sam2-v2",
+      "python": "/opt/anaconda3/envs/pixelforge-sam2-v2/bin/python",
+      "available": true
+    },
+    "grounding": {
+      "conda_env": "pixelforge-grounding-dino",
+      "python": "/opt/anaconda3/envs/pixelforge-grounding-dino/bin/python",
+      "available": true
+    },
+    "sam2_box": {
+      "conda_env": "pixelforge-sam2-v2",
+      "python": "/opt/anaconda3/envs/pixelforge-sam2-v2/bin/python",
+      "available": true
+    },
+    "moebius": {
+      "conda_env": "pixelforge-moebius",
+      "python": "/opt/anaconda3/envs/pixelforge-moebius/bin/python",
+      "available": true
+    },
+    "e2e": {
+      "conda_env": "pixelforge-sam2-v2",
+      "python": "/opt/anaconda3/envs/pixelforge-sam2-v2/bin/python",
+      "available": true
+    }
+  },
+  "model_commits": {
+    "sam2": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+    "moebius": "b88d462bacb9af6e7128a3b4cc4a07418bedfd61",
+    "grounding_dino": "126abe633ffe333e16e4a0a4e946bc1003caf757"
+  },
+  "methodology": {
+    "image_source": "synthetic closed-form 512x512 scenes (no external dataset)",
+    "warm_repeats": 3,
+    "measurement_only": true,
+    "ground_truth_policy": "IoU/F1 only for case1 where exact disc reference exists; otherwise mask_area_ratio and latency only"
+  },
+  "test_cases": [
+    {
+      "case_id": "case1_isolated_disc",
+      "description": "Simple isolated orange disc on gradient background",
+      "resolution": "512x512",
+      "point_xy": [
+        320,
+        256
+      ],
+      "text_prompt": "orange circle",
+      "expected_region": "circular disc, ~7% of frame",
+      "seed": 16001,
+      "image_sha256": "7053c08ca2915d7c4652648394791918660cc1df72949f575ccd92c88a1113e9",
+      "reference_mask_sha256": "ed2ddbbfa2dc9a074639dba1edc6930749d65bd21ae64601040a5a3f089eaf51",
+      "has_reference_mask": true,
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/mvp_benchmark/case1_isolated_disc.png",
+      "reference_mask_path": "/Users/atik/Projects/PixelForge/outputs/mvp_benchmark/case1_isolated_disc_reference_mask.png"
+    },
+    {
+      "case_id": "case2_adjacent_objects",
+      "description": "Red square touching blue square \u2014 tests boundary ambiguity",
+      "resolution": "512x512",
+      "point_xy": [
+        160,
+        240
+      ],
+      "text_prompt": "red square",
+      "expected_region": "left red square, not the blue neighbor",
+      "seed": 16001,
+      "image_sha256": "f274a56177886f2277318e448fb8ac93905b460d26924538457d240951cb3d31",
+      "reference_mask_sha256": null,
+      "has_reference_mask": false,
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/mvp_benchmark/case2_adjacent_objects.png"
+    },
+    {
+      "case_id": "case3_textured_background",
+      "description": "Green ellipse on busy sinusoidal background",
+      "resolution": "512x512",
+      "point_xy": [
+        256,
+        256
+      ],
+      "text_prompt": "green ellipse",
+      "expected_region": "central green ellipse over textured field",
+      "seed": 16001,
+      "image_sha256": "10c8d61c9cb6f79718edaa5c8a9cb436519aa63c624347b6a0b104ad878fdf57",
+      "reference_mask_sha256": null,
+      "has_reference_mask": false,
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/mvp_benchmark/case3_textured_background.png"
+    }
+  ],
+  "sam2": {
+    "status": "MEASURED",
+    "device": "mps",
+    "model": "SAM 2.1 Hiera-Tiny",
+    "model_load_ms": 1545.839,
+    "peak_rss_mib": 650.59,
+    "mps_driver_mib": 5.7,
+    "cases": [
+      {
+        "case_id": "case1_isolated_disc",
+        "device": "mps",
+        "model": "SAM 2.1 Hiera-Tiny",
+        "method": "point",
+        "model_load_ms": 1545.839,
+        "first_segmentation_ms": 1807.329,
+        "warm_segmentation_ms": {
+          "best": 182.663,
+          "mean": 212.588,
+          "samples": 3
+        },
+        "confidence": 0.9799347519874573,
+        "mask_area_pixels": 15335,
+        "mask_area_ratio": 0.058498,
+        "mask_shape": [
+          512,
+          512
+        ],
+        "mask_sha256": "009d8be1d6efd31cfd2386d1ff6dde361882936b52c040138d44c500f0a063bc",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.058498382568359375,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          },
+          {
+            "name": "iou",
+            "value": 0.9975281337409745,
+            "kind": "REFERENCE_DEPENDENT",
+            "unit": "ratio",
+            "note": null
+          },
+          {
+            "name": "f1",
+            "value": 0.9987625374495246,
+            "kind": "REFERENCE_DEPENDENT",
+            "unit": "ratio",
+            "note": null
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "sam2",
+          "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": 16001,
+          "parameters": {
+            "point_xy": [
+              320,
+              256
+            ]
+          },
+          "hashes": {
+            "image_sha256": "7053c08ca2915d7c4652648394791918660cc1df72949f575ccd92c88a1113e9",
+            "mask_sha256": "009d8be1d6efd31cfd2386d1ff6dde361882936b52c040138d44c500f0a063bc",
+            "output_sha256": null
+          }
+        }
+      },
+      {
+        "case_id": "case2_adjacent_objects",
+        "device": "mps",
+        "model": "SAM 2.1 Hiera-Tiny",
+        "method": "point",
+        "model_load_ms": null,
+        "first_segmentation_ms": 184.488,
+        "warm_segmentation_ms": {
+          "best": 185.191,
+          "mean": 186.301,
+          "samples": 3
+        },
+        "confidence": 0.9687584042549133,
+        "mask_area_pixels": 6396,
+        "mask_area_ratio": 0.024399,
+        "mask_shape": [
+          512,
+          512
+        ],
+        "mask_sha256": "b09ec8206d86b72b26e7de94a163c5756c0902a0be9f1c81f4f1687426cc38e8",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.0243988037109375,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "sam2",
+          "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": 16001,
+          "parameters": {
+            "point_xy": [
+              160,
+              240
+            ]
+          },
+          "hashes": {
+            "image_sha256": "f274a56177886f2277318e448fb8ac93905b460d26924538457d240951cb3d31",
+            "mask_sha256": "b09ec8206d86b72b26e7de94a163c5756c0902a0be9f1c81f4f1687426cc38e8",
+            "output_sha256": null
+          }
+        }
+      },
+      {
+        "case_id": "case3_textured_background",
+        "device": "mps",
+        "model": "SAM 2.1 Hiera-Tiny",
+        "method": "point",
+        "model_load_ms": null,
+        "first_segmentation_ms": 185.192,
+        "warm_segmentation_ms": {
+          "best": 183.93,
+          "mean": 186.15,
+          "samples": 3
+        },
+        "confidence": 0.9864405989646912,
+        "mask_area_pixels": 15531,
+        "mask_area_ratio": 0.059246,
+        "mask_shape": [
+          512,
+          512
+        ],
+        "mask_sha256": "e077ac557ae7470cac614f7d5d7f08c61ffd1445b5ba8cd6d588bbe30001cc61",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.059246063232421875,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "sam2",
+          "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": 16001,
+          "parameters": {
+            "point_xy": [
+              256,
+              256
+            ]
+          },
+          "hashes": {
+            "image_sha256": "10c8d61c9cb6f79718edaa5c8a9cb436519aa63c624347b6a0b104ad878fdf57",
+            "mask_sha256": "e077ac557ae7470cac614f7d5d7f08c61ffd1445b5ba8cd6d588bbe30001cc61",
+            "output_sha256": null
+          }
+        }
+      }
+    ]
+  },
+  "grounding_dino": {
+    "status": "MEASURED",
+    "device": "cpu",
+    "model": "Grounding DINO SwinT OGC",
+    "model_load_ms": 4659.05,
+    "peak_rss_mib": 2261.64,
+    "cases": [
+      {
+        "case_id": "case1_isolated_disc",
+        "device": "cpu",
+        "model": "Grounding DINO SwinT OGC",
+        "prompt": "orange circle",
+        "model_load_ms": 4659.05,
+        "grounding_latency_ms": 2412.517,
+        "detection_count": 1,
+        "detections": [
+          {
+            "index": 0,
+            "label": "orange circle",
+            "confidence": 0.963491,
+            "box_xyxy": [
+              249.87008666992188,
+              185.22386169433594,
+              391.0296936035156,
+              327.1199951171875
+            ]
+          }
+        ],
+        "selected_box_xyxy": [
+          249.87008666992188,
+          185.22386169433594,
+          391.0296936035156,
+          327.1199951171875
+        ],
+        "selected_confidence": 0.963491,
+        "metrics": [
+          {
+            "name": "detection_count",
+            "value": 1.0,
+            "kind": "MEASURED"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "grounding_dino",
+          "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+          "backend": "CPU",
+          "device": "cpu",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "prompt": "orange circle"
+          },
+          "hashes": {
+            "image_sha256": "7053c08ca2915d7c4652648394791918660cc1df72949f575ccd92c88a1113e9",
+            "mask_sha256": null,
+            "output_sha256": null
+          }
+        }
+      },
+      {
+        "case_id": "case2_adjacent_objects",
+        "device": "cpu",
+        "model": "Grounding DINO SwinT OGC",
+        "prompt": "red square",
+        "model_load_ms": null,
+        "grounding_latency_ms": 2323.692,
+        "detection_count": 1,
+        "detections": [
+          {
+            "index": 0,
+            "label": "red square",
+            "confidence": 0.802531,
+            "box_xyxy": [
+              118.66134643554688,
+              198.26266479492188,
+              281.0541687011719,
+              281.65692138671875
+            ]
+          }
+        ],
+        "selected_box_xyxy": [
+          118.66134643554688,
+          198.26266479492188,
+          281.0541687011719,
+          281.65692138671875
+        ],
+        "selected_confidence": 0.802531,
+        "metrics": [
+          {
+            "name": "detection_count",
+            "value": 1.0,
+            "kind": "MEASURED"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "grounding_dino",
+          "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+          "backend": "CPU",
+          "device": "cpu",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "prompt": "red square"
+          },
+          "hashes": {
+            "image_sha256": "f274a56177886f2277318e448fb8ac93905b460d26924538457d240951cb3d31",
+            "mask_sha256": null,
+            "output_sha256": null
+          }
+        }
+      },
+      {
+        "case_id": "case3_textured_background",
+        "device": "cpu",
+        "model": "Grounding DINO SwinT OGC",
+        "prompt": "green ellipse",
+        "model_load_ms": null,
+        "grounding_latency_ms": 2317.318,
+        "detection_count": 1,
+        "detections": [
+          {
+            "index": 0,
+            "label": "green ellipse",
+            "confidence": 0.918812,
+            "box_xyxy": [
+              165.78871154785156,
+              199.79872131347656,
+              347.06585693359375,
+              312.649169921875
+            ]
+          }
+        ],
+        "selected_box_xyxy": [
+          165.78871154785156,
+          199.79872131347656,
+          347.06585693359375,
+          312.649169921875
+        ],
+        "selected_confidence": 0.918812,
+        "metrics": [
+          {
+            "name": "detection_count",
+            "value": 1.0,
+            "kind": "MEASURED"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "grounding_dino",
+          "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+          "backend": "CPU",
+          "device": "cpu",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "prompt": "green ellipse"
+          },
+          "hashes": {
+            "image_sha256": "10c8d61c9cb6f79718edaa5c8a9cb436519aa63c624347b6a0b104ad878fdf57",
+            "mask_sha256": null,
+            "output_sha256": null
+          }
+        }
+      }
+    ]
+  },
+  "sam2_box": {
+    "status": "MEASURED",
+    "device": "mps",
+    "cases": [
+      {
+        "case_id": "case1_isolated_disc",
+        "status": "MEASURED",
+        "box_xyxy": [
+          249,
+          185,
+          391,
+          327
+        ],
+        "segmentation_latency_ms": 497.251,
+        "confidence": 0.994256317615509,
+        "mask_area_pixels": 15344,
+        "mask_area_ratio": 0.058533,
+        "mask_shape": [
+          512,
+          512
+        ],
+        "mask_sha256": "201bc5b50190ae992200f1c32a5e314ee886b802c1805d7aad239326e45088f3",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.05853271484375,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          },
+          {
+            "name": "iou",
+            "value": 0.9981135757496911,
+            "kind": "REFERENCE_DEPENDENT",
+            "unit": "ratio",
+            "note": null
+          },
+          {
+            "name": "f1",
+            "value": 0.9990558973858125,
+            "kind": "REFERENCE_DEPENDENT",
+            "unit": "ratio",
+            "note": null
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "sam2",
+          "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "box_xyxy": [
+              249,
+              185,
+              391,
+              327
+            ]
+          },
+          "hashes": {
+            "image_sha256": "7053c08ca2915d7c4652648394791918660cc1df72949f575ccd92c88a1113e9",
+            "mask_sha256": "201bc5b50190ae992200f1c32a5e314ee886b802c1805d7aad239326e45088f3",
+            "output_sha256": null
+          }
+        }
+      },
+      {
+        "case_id": "case2_adjacent_objects",
+        "status": "MEASURED",
+        "box_xyxy": [
+          118,
+          198,
+          281,
+          281
+        ],
+        "segmentation_latency_ms": 199.27,
+        "confidence": 0.9906063079833984,
+        "mask_area_pixels": 12777,
+        "mask_area_ratio": 0.04874,
+        "mask_shape": [
+          512,
+          512
+        ],
+        "mask_sha256": "aa15785d9ecbd49a7ef1a2e6832e632540fe3596f5078657a4e9ff56007af723",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.048740386962890625,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "sam2",
+          "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "box_xyxy": [
+              118,
+              198,
+              281,
+              281
+            ]
+          },
+          "hashes": {
+            "image_sha256": "f274a56177886f2277318e448fb8ac93905b460d26924538457d240951cb3d31",
+            "mask_sha256": "aa15785d9ecbd49a7ef1a2e6832e632540fe3596f5078657a4e9ff56007af723",
+            "output_sha256": null
+          }
+        }
+      },
+      {
+        "case_id": "case3_textured_background",
+        "status": "MEASURED",
+        "box_xyxy": [
+          165,
+          199,
+          347,
+          312
+        ],
+        "segmentation_latency_ms": 188.175,
+        "confidence": 0.9947027564048767,
+        "mask_area_pixels": 15552,
+        "mask_area_ratio": 0.059326,
+        "mask_shape": [
+          512,
+          512
+        ],
+        "mask_sha256": "f6bab02d68edf413f1a74d5173c1f5180559780008ecae24e6ebb0bafdee7741",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.059326171875,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "sam2",
+          "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "box_xyxy": [
+              165,
+              199,
+              347,
+              312
+            ]
+          },
+          "hashes": {
+            "image_sha256": "10c8d61c9cb6f79718edaa5c8a9cb436519aa63c624347b6a0b104ad878fdf57",
+            "mask_sha256": "f6bab02d68edf413f1a74d5173c1f5180559780008ecae24e6ebb0bafdee7741",
+            "output_sha256": null
+          }
+        }
+      }
+    ],
+    "peak_rss_mib": 795.59,
+    "mps_driver_mib": 5.7
+  },
+  "moebius": {
+    "status": "MEASURED",
+    "device": "mps",
+    "model": "Moebius",
+    "model_load_ms": 5692.613,
+    "peak_rss_mib": 1561.19,
+    "mps_driver_mib": 209.7,
+    "cases": [
+      {
+        "case_id": "case1_isolated_disc",
+        "status": "MEASURED",
+        "mask_source": "sam2_point",
+        "mask_sha256": "009d8be1d6efd31cfd2386d1ff6dde361882936b52c040138d44c500f0a063bc",
+        "model_load_ms": 5692.613,
+        "first_inference_ms": 26836.074,
+        "warm_inference_ms": {
+          "best": 26922.941,
+          "mean": 27630.725,
+          "samples": 3
+        },
+        "output_resolution": [
+          512,
+          512,
+          3
+        ],
+        "adapter_latency_ms": 28526.702,
+        "memory_mb": 4504.22,
+        "output_sha256": "5a90baba366056b65a9d7634ebe801ce39b1252ed7cd6c57e5b94acb66566edd",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.058498382568359375,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          },
+          {
+            "name": "outside_mask_preservation",
+            "value": null,
+            "kind": "UNAVAILABLE",
+            "note": "not computed in benchmark harness"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "moebius",
+          "model_commit": "b88d462bacb9af6e7128a3b4cc4a07418bedfd61",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "num_steps": 20,
+            "mask_source": "sam2_point"
+          },
+          "hashes": {
+            "image_sha256": "7053c08ca2915d7c4652648394791918660cc1df72949f575ccd92c88a1113e9",
+            "mask_sha256": "009d8be1d6efd31cfd2386d1ff6dde361882936b52c040138d44c500f0a063bc",
+            "output_sha256": "5a90baba366056b65a9d7634ebe801ce39b1252ed7cd6c57e5b94acb66566edd"
+          }
+        }
+      },
+      {
+        "case_id": "case2_adjacent_objects",
+        "status": "MEASURED",
+        "mask_source": "sam2_point",
+        "mask_sha256": "b09ec8206d86b72b26e7de94a163c5756c0902a0be9f1c81f4f1687426cc38e8",
+        "model_load_ms": null,
+        "first_inference_ms": 29372.295,
+        "warm_inference_ms": {
+          "best": 29829.188,
+          "mean": 30505.986,
+          "samples": 3
+        },
+        "output_resolution": [
+          512,
+          512,
+          3
+        ],
+        "adapter_latency_ms": 31085.204,
+        "memory_mb": 4504.22,
+        "output_sha256": "a1197ba5a0ed116cf22c0b93c28d7dd78d3feb0b6a4c2bd3741906a5e32deb78",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.0243988037109375,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          },
+          {
+            "name": "outside_mask_preservation",
+            "value": null,
+            "kind": "UNAVAILABLE",
+            "note": "not computed in benchmark harness"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "moebius",
+          "model_commit": "b88d462bacb9af6e7128a3b4cc4a07418bedfd61",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "num_steps": 20,
+            "mask_source": "sam2_point"
+          },
+          "hashes": {
+            "image_sha256": "f274a56177886f2277318e448fb8ac93905b460d26924538457d240951cb3d31",
+            "mask_sha256": "b09ec8206d86b72b26e7de94a163c5756c0902a0be9f1c81f4f1687426cc38e8",
+            "output_sha256": "a1197ba5a0ed116cf22c0b93c28d7dd78d3feb0b6a4c2bd3741906a5e32deb78"
+          }
+        }
+      },
+      {
+        "case_id": "case3_textured_background",
+        "status": "MEASURED",
+        "mask_source": "sam2_point",
+        "mask_sha256": "e077ac557ae7470cac614f7d5d7f08c61ffd1445b5ba8cd6d588bbe30001cc61",
+        "model_load_ms": null,
+        "first_inference_ms": 31255.105,
+        "warm_inference_ms": {
+          "best": 30837.336,
+          "mean": 31252.753,
+          "samples": 3
+        },
+        "output_resolution": [
+          512,
+          512,
+          3
+        ],
+        "adapter_latency_ms": 30833.954,
+        "memory_mb": 4522.22,
+        "output_sha256": "135076020f24cfc7057b5593a5aca4bed9b729768bff2be730cdcca27a95b653",
+        "metrics": [
+          {
+            "name": "mask_area_ratio",
+            "value": 0.059246063232421875,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": null
+          },
+          {
+            "name": "outside_mask_preservation",
+            "value": null,
+            "kind": "UNAVAILABLE",
+            "note": "not computed in benchmark harness"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "moebius",
+          "model_commit": "b88d462bacb9af6e7128a3b4cc4a07418bedfd61",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "num_steps": 20,
+            "mask_source": "sam2_point"
+          },
+          "hashes": {
+            "image_sha256": "10c8d61c9cb6f79718edaa5c8a9cb436519aa63c624347b6a0b104ad878fdf57",
+            "mask_sha256": "e077ac557ae7470cac614f7d5d7f08c61ffd1445b5ba8cd6d588bbe30001cc61",
+            "output_sha256": "135076020f24cfc7057b5593a5aca4bed9b729768bff2be730cdcca27a95b653"
+          }
+        }
+      }
+    ]
+  },
+  "end_to_end": {
+    "text_to_moebius": {
+      "status": "MEASURED",
+      "case_id": "case1_isolated_disc",
+      "prompt": "orange circle",
+      "total_latency_ms": 52627.511,
+      "stages": [
+        {
+          "stage": "grounding_dino",
+          "latency_ms": 7285.702,
+          "device": "cpu"
+        },
+        {
+          "stage": "sam2_box",
+          "latency_ms": 499.622,
+          "device": "mps"
+        },
+        {
+          "stage": "moebius",
+          "latency_ms": 42678.286,
+          "device": "mps"
+        }
+      ],
+      "output_resolution": [
+        512,
+        512,
+        3
+      ],
+      "output_sha256": "0942308653f141fdd99afb1e93dbdf22399482509a33da75bca5acad1b244a42",
+      "mask_sha256": "201bc5b50190ae992200f1c32a5e314ee886b802c1805d7aad239326e45088f3",
+      "image_sha256": "7053c08ca2915d7c4652648394791918660cc1df72949f575ccd92c88a1113e9"
+    },
+    "click_to_moebius": {
+      "status": "MEASURED",
+      "case_id": "case2_adjacent_objects",
+      "point_xy": [
+        160,
+        240
+      ],
+      "total_latency_ms": 38716.205,
+      "stages": [
+        {
+          "stage": "sam2_point",
+          "latency_ms": 357.742,
+          "device": "mps"
+        },
+        {
+          "stage": "moebius",
+          "latency_ms": 37803.186,
+          "device": "mps"
+        }
+      ],
+      "output_resolution": [
+        512,
+        512,
+        3
+      ],
+      "output_sha256": "a1197ba5a0ed116cf22c0b93c28d7dd78d3feb0b6a4c2bd3741906a5e32deb78",
+      "mask_sha256": "b09ec8206d86b72b26e7de94a163c5756c0902a0be9f1c81f4f1687426cc38e8",
+      "image_sha256": "f274a56177886f2277318e448fb8ac93905b460d26924538457d240951cb3d31"
+    }
+  },
+  "limitations": [
+    "Measurement only \u2014 no optimization applied.",
+    "Cross-env orchestration adds subprocess overhead to end-to-end timings.",
+    "Grounding DINO quality metrics omitted (no ground-truth boxes).",
+    "Moebius marked CONDITIONAL in prior validation; benchmark records actual behavior.",
+    "Generated PNG artifacts are not committed (outputs/mvp_benchmark/)."
+  ]
+}
