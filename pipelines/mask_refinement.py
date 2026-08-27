@@ -34,13 +34,16 @@ def refine_mask(
         region = validate_mask(remove, image=image)
         out = out & ~region
     if erode > 0:
-        out = _binary_erode(out, erode)
+        out = binary_erode(out, erode)
     if dilate > 0:
-        out = _binary_dilate(out, dilate)
+        out = binary_dilate(out, dilate)
     return validate_mask(out, image=image)
 
 
-def _binary_dilate(mask: np.ndarray, iterations: int) -> np.ndarray:
+def binary_dilate(mask: np.ndarray, iterations: int) -> MaskArray:
+    """Morphological dilation on a bool H×W mask."""
+    if iterations <= 0:
+        return validate_mask(mask)
     out = mask.astype(bool, copy=True)
     for _ in range(iterations):
         padded = np.pad(out, 1, mode="constant", constant_values=False)
@@ -50,11 +53,14 @@ def _binary_dilate(mask: np.ndarray, iterations: int) -> np.ndarray:
             for dx in range(3):
                 merged |= padded[dy : dy + h, dx : dx + w]
         out = merged
-    return out
+    return validate_mask(out)
 
 
-def _binary_erode(mask: np.ndarray, iterations: int) -> np.ndarray:
-    return ~_binary_dilate(~mask, iterations)
+def binary_erode(mask: np.ndarray, iterations: int) -> MaskArray:
+    """Morphological erosion on a bool H×W mask."""
+    if iterations <= 0:
+        return validate_mask(mask)
+    return ~binary_dilate(~mask, iterations)
 
 
 def require_non_empty_mask(mask: np.ndarray, *, stage: str) -> MaskArray:

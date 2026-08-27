@@ -3,9 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editByInstruction, inpaint, segment, selectByText } from "@/lib/api";
 import {
+  MaskEditHistory,
+  cloneMask,
   createEmptyMask,
   decodeMaskPng,
+  dilateMask,
   encodeMaskPng,
+  erodeMask,
   maskHasInpaint,
   maskPreviewUrl,
   paintBrush,
@@ -36,6 +40,14 @@ export function ImageEditor() {
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [tool, setTool] = useState<EditorTool>("select");
   const [brushRadius, setBrushRadius] = useState(24);
+  const [eraserRadius, setEraserRadius] = useState(24);
+  const [featherRadius, setFeatherRadius] = useState(0);
+  const [morphAmount, setMorphAmount] = useState(1);
+  const [showMaskOverlay, setShowMaskOverlay] = useState(true);
+  const [showMaskOnly, setShowMaskOnly] = useState(false);
+  const [hasAiMask, setHasAiMask] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const [backend] = useState<InpaintBackend>("moebius");
   const [textPrompt, setTextPrompt] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
@@ -45,8 +57,17 @@ export function ImageEditor() {
   const [error, setError] = useState<string | null>(null);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const maskRef = useRef<Uint8Array | null>(null);
+  const aiMaskRef = useRef<Uint8Array | null>(null);
+  const maskHistoryRef = useRef(new MaskEditHistory());
+  const strokeSnapshotRef = useRef<Uint8Array | null>(null);
 
   const busy = status !== "idle";
+
+  const syncHistoryFlags = useCallback(() => {
+    const history = maskHistoryRef.current;
+    setCanUndo(history.canUndo());
+    setCanRedo(history.canRedo());
+  }, []);
 
   const updateMaskPreview = useCallback(
     (nextMask: Uint8Array | null, size: ImageDimensions | null) => {
@@ -54,9 +75,36 @@ export function ImageEditor() {
         setMaskPreview(null);
         return;
       }
-      setMaskPreview(maskPreviewUrl(nextMask, size.width, size.height));
+      setMaskPreview(
+        maskPreviewUrl(nextMask, size.width, size.height, {
+          featherRadius: featherRadius > 0 ? featherRadius : undefined,
+        })
+      );
     },
-    []
+    [featherRadius]
+  );
+
+  const applyMask = useCallback(
+    (nextMask: Uint8Array) => {
+      if (!imageSize) return;
+      maskRef.current = nextMask;
+      setMask(nextMask);
+      updateMaskPreview(nextMask, imageSize);
+      syncHistoryFlags();
+    },
+    [imageSize, syncHistoryFlags, updateMaskPreview]
+  );
+
+  const commitMaskEdit = useCallback(
+    (nextMask: Uint8Array, options?: { recordHistory?: boolean }) => {
+      if (!maskRef.current || options?.recordHistory === false) {
+        applyMask(nextMask);
+        return;
+      }
+      maskHistoryRef.current.push(maskRef.current);
+      applyMask(nextMask);
+    },
+    [applyMask]
   );
 
   const resetSession = useCallback(
@@ -68,6 +116,11 @@ export function ImageEditor() {
       setImageSize(size);
       setMask(null);
       maskRef.current = null;
+      aiMaskRef.current = null;
+      maskHistoryRef.current.clear();
+      setHasAiMask(false);
+      setCanUndo(false);
+      setCanRedo(false);
       setMaskPreview(null);
       setResultUrl(null);
       setLatencyMs(null);
@@ -77,6 +130,9 @@ export function ImageEditor() {
       setEditInstruction("");
       setDetections([]);
       setDetectionIndex(0);
+      setShowMaskOverlay(true);
+      setShowMaskOnly(false);
+      setFeatherRadius(0);
     },
     [imageUrl, resultUrl]
   );
@@ -101,12 +157,13 @@ export function ImageEditor() {
     async (blob: Blob) => {
       if (!imageSize) return;
       const decoded = await decodeMaskPng(blob, imageSize);
-      maskRef.current = decoded;
-      setMask(decoded);
-      updateMaskPreview(decoded, imageSize);
+      aiMaskRef.current = cloneMask(decoded);
+      maskHistoryRef.current.clear();
+      setHasAiMask(true);
+      applyMask(decoded);
       setTool("brush");
     },
-    [imageSize, updateMaskPreview]
+    [applyMask, imageSize]
   );
 
   const handleFindObject = useCallback(async () => {
@@ -187,25 +244,77 @@ export function ImageEditor() {
     [applyMaskFromBlob, busy, imageFile, imageSize]
   );
 
+  const handleStrokeStart = useCallback(() => {
+    if (maskRef.current) {
+      strokeSnapshotRef.current = cloneMask(maskRef.current);
+    }
+  }, []);
+
+  const handleStrokeEnd = useCallback(() => {
+    if (strokeSnapshotRef.current && maskRef.current) {
+      maskHistoryRef.current.push(strokeSnapshotRef.current);
+      strokeSnapshotRef.current = null;
+      syncHistoryFlags();
+    }
+  }, [syncHistoryFlags]);
+
   const handleBrushStroke = useCallback(
     (x: number, y: number, mode: "brush" | "erase") => {
       if (!imageSize || !maskRef.current) return;
-      const next = new Uint8Array(maskRef.current);
-      paintBrush(next, imageSize.width, imageSize.height, x, y, brushRadius, mode);
+      const next = cloneMask(maskRef.current);
+      const radius = mode === "erase" ? eraserRadius : brushRadius;
+      paintBrush(next, imageSize.width, imageSize.height, x, y, radius, mode);
       maskRef.current = next;
       setMask(next);
       updateMaskPreview(next, imageSize);
     },
-    [brushRadius, imageSize, updateMaskPreview]
+    [brushRadius, eraserRadius, imageSize, updateMaskPreview]
   );
+
+  const handleExpandMask = useCallback(() => {
+    if (!imageSize || !maskRef.current) return;
+    const next = dilateMask(
+      maskRef.current,
+      imageSize.width,
+      imageSize.height,
+      morphAmount
+    );
+    commitMaskEdit(next, { recordHistory: true });
+  }, [commitMaskEdit, imageSize, morphAmount]);
+
+  const handleShrinkMask = useCallback(() => {
+    if (!imageSize || !maskRef.current) return;
+    const next = erodeMask(
+      maskRef.current,
+      imageSize.width,
+      imageSize.height,
+      morphAmount
+    );
+    commitMaskEdit(next, { recordHistory: true });
+  }, [commitMaskEdit, imageSize, morphAmount]);
+
+  const handleUndo = useCallback(() => {
+    if (!maskRef.current) return;
+    const restored = maskHistoryRef.current.undo(maskRef.current);
+    if (restored) applyMask(restored);
+  }, [applyMask]);
+
+  const handleRedo = useCallback(() => {
+    if (!maskRef.current) return;
+    const restored = maskHistoryRef.current.redo(maskRef.current);
+    if (restored) applyMask(restored);
+  }, [applyMask]);
+
+  const handleResetToAiMask = useCallback(() => {
+    if (!aiMaskRef.current) return;
+    commitMaskEdit(cloneMask(aiMaskRef.current), { recordHistory: true });
+  }, [commitMaskEdit]);
 
   const handleClearMask = useCallback(() => {
     if (!imageSize) return;
     const cleared = createEmptyMask(imageSize.width, imageSize.height);
-    maskRef.current = cleared;
-    setMask(cleared);
-    updateMaskPreview(cleared, imageSize);
-  }, [imageSize, updateMaskPreview]);
+    commitMaskEdit(cleared, { recordHistory: true });
+  }, [commitMaskEdit, imageSize]);
 
   const handleGenerate = useCallback(async () => {
     if (!imageFile || !imageSize || !maskRef.current || busy) return;
@@ -260,6 +369,12 @@ export function ImageEditor() {
   }, [busy, editInstruction, imageFile, resultUrl]);
 
   useEffect(() => {
+    if (mask && imageSize) {
+      updateMaskPreview(mask, imageSize);
+    }
+  }, [featherRadius, imageSize, mask, updateMaskPreview]);
+
+  useEffect(() => {
     return () => {
       revokeIfObjectUrl(imageUrl);
       revokeIfObjectUrl(resultUrl);
@@ -279,7 +394,7 @@ export function ImageEditor() {
           PixelForge
         </h1>
         <p style={{ margin: "4px 0 0", fontSize: 13, color: "#7b8494" }}>
-          Click to segment · refine mask · generate with Moebius
+          Select · refine mask · preview · generate with Moebius
         </p>
       </header>
 
@@ -338,9 +453,15 @@ export function ImageEditor() {
             mask={mask}
             tool={tool}
             brushRadius={brushRadius}
+            eraserRadius={eraserRadius}
+            featherRadius={featherRadius}
+            showOverlay={showMaskOverlay}
+            showMaskOnly={showMaskOnly}
             disabled={busy || !imageUrl}
             onPointSelect={handlePointSelect}
             onBrushStroke={handleBrushStroke}
+            onStrokeStart={handleStrokeStart}
+            onStrokeEnd={handleStrokeEnd}
           />
 
           <ResultPanel
@@ -348,6 +469,10 @@ export function ImageEditor() {
             maskPreviewUrl={maskPreview}
             resultUrl={resultUrl}
             latencyMs={latencyMs}
+            maskLabel={
+              featherRadius > 0 ? "Edited mask (feather preview)" : "Edited mask"
+            }
+            hasAiMask={hasAiMask}
           />
         </main>
 
@@ -355,6 +480,14 @@ export function ImageEditor() {
           tool={tool}
           backend={backend}
           brushRadius={brushRadius}
+          eraserRadius={eraserRadius}
+          morphAmount={morphAmount}
+          featherRadius={featherRadius}
+          showMaskOverlay={showMaskOverlay}
+          showMaskOnly={showMaskOnly}
+          hasAiMask={hasAiMask}
+          canUndo={canUndo}
+          canRedo={canRedo}
           busy={busy}
           canGenerate={Boolean(imageFile && mask && maskHasInpaint(mask))}
           textPrompt={textPrompt}
@@ -363,6 +496,16 @@ export function ImageEditor() {
           onUpload={handleUpload}
           onToolChange={setTool}
           onBrushRadiusChange={setBrushRadius}
+          onEraserRadiusChange={setEraserRadius}
+          onMorphAmountChange={setMorphAmount}
+          onFeatherRadiusChange={setFeatherRadius}
+          onShowMaskOverlayChange={setShowMaskOverlay}
+          onShowMaskOnlyChange={setShowMaskOnly}
+          onExpandMask={handleExpandMask}
+          onShrinkMask={handleShrinkMask}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onResetToAiMask={handleResetToAiMask}
           onClearMask={handleClearMask}
           onGenerate={handleGenerate}
           onTextPromptChange={setTextPrompt}

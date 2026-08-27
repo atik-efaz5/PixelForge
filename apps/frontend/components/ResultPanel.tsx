@@ -5,6 +5,8 @@ interface ResultPanelProps {
   maskPreviewUrl: string | null;
   resultUrl: string | null;
   latencyMs: number | null;
+  maskLabel?: string;
+  hasAiMask?: boolean;
 }
 
 export function ResultPanel({
@@ -12,6 +14,8 @@ export function ResultPanel({
   maskPreviewUrl,
   resultUrl,
   latencyMs,
+  maskLabel = "Edited mask",
+  hasAiMask = false,
 }: ResultPanelProps) {
   return (
     <section aria-label="Results" style={{ padding: "16px 20px 20px" }}>
@@ -25,8 +29,13 @@ export function ResultPanel({
           color: "#9aa3b2",
         }}
       >
-        Result
+        Preview
       </h2>
+      {hasAiMask ? (
+        <p style={{ margin: "0 0 8px", fontSize: 12, color: "#7b8494" }}>
+          AI mask is stored. Use Reset to AI mask to discard manual edits.
+        </p>
+      ) : null}
       {latencyMs !== null ? (
         <p style={{ margin: "0 0 12px", fontSize: 12, color: "#7b8494" }}>
           Inpainting latency: {latencyMs.toFixed(1)} ms
@@ -40,7 +49,7 @@ export function ResultPanel({
         }}
       >
         <PreviewTile title="Original" url={originalUrl} alt="Original uploaded image" />
-        <PreviewTile title="Mask" url={maskPreviewUrl} alt="Inpaint mask preview" />
+        <PreviewTile title={maskLabel} url={maskPreviewUrl} alt="Current edited mask preview" />
         <PreviewTile title="Result" url={resultUrl} alt="Generated inpainting result" />
       </div>
     </section>

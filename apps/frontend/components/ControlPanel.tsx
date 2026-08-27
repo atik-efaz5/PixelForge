@@ -6,6 +6,14 @@ interface ControlPanelProps {
   tool: EditorTool;
   backend: InpaintBackend;
   brushRadius: number;
+  eraserRadius: number;
+  morphAmount: number;
+  featherRadius: number;
+  showMaskOverlay: boolean;
+  showMaskOnly: boolean;
+  hasAiMask: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   busy: boolean;
   canGenerate: boolean;
   textPrompt: string;
@@ -14,6 +22,16 @@ interface ControlPanelProps {
   onUpload: (file: File) => void;
   onToolChange: (tool: EditorTool) => void;
   onBrushRadiusChange: (radius: number) => void;
+  onEraserRadiusChange: (radius: number) => void;
+  onMorphAmountChange: (amount: number) => void;
+  onFeatherRadiusChange: (radius: number) => void;
+  onShowMaskOverlayChange: (show: boolean) => void;
+  onShowMaskOnlyChange: (show: boolean) => void;
+  onExpandMask: () => void;
+  onShrinkMask: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onResetToAiMask: () => void;
   onClearMask: () => void;
   onGenerate: () => void;
   onTextPromptChange: (value: string) => void;
@@ -29,6 +47,14 @@ export function ControlPanel({
   tool,
   backend,
   brushRadius,
+  eraserRadius,
+  morphAmount,
+  featherRadius,
+  showMaskOverlay,
+  showMaskOnly,
+  hasAiMask,
+  canUndo,
+  canRedo,
   busy,
   canGenerate,
   textPrompt,
@@ -37,6 +63,16 @@ export function ControlPanel({
   onUpload,
   onToolChange,
   onBrushRadiusChange,
+  onEraserRadiusChange,
+  onMorphAmountChange,
+  onFeatherRadiusChange,
+  onShowMaskOverlayChange,
+  onShowMaskOnlyChange,
+  onExpandMask,
+  onShrinkMask,
+  onUndo,
+  onRedo,
+  onResetToAiMask,
   onClearMask,
   onGenerate,
   onTextPromptChange,
@@ -51,14 +87,16 @@ export function ControlPanel({
     <aside
       aria-label="Editor controls"
       style={{
-        width: 280,
+        width: 300,
         flexShrink: 0,
         display: "flex",
         flexDirection: "column",
-        gap: 20,
+        gap: 18,
         padding: 20,
         background: "#151820",
         borderLeft: "1px solid #2a2f3a",
+        overflowY: "auto",
+        maxHeight: "100vh",
       }}
     >
       <section>
@@ -128,12 +166,12 @@ export function ControlPanel({
           </button>
         </div>
         <p style={hintStyle}>
-          Enter text to find an object, or click directly on the image.
+          Text finds an object; click segments on the image. AI mask is stored separately from edits.
         </p>
       </section>
 
       <section>
-        <h2 style={sectionTitleStyle}>Mask</h2>
+        <h2 style={sectionTitleStyle}>Mask refine</h2>
         <div style={buttonRowStyle}>
           <button
             type="button"
@@ -151,7 +189,7 @@ export function ControlPanel({
             onClick={() => onToolChange("erase")}
             style={toolButtonStyle(tool === "erase")}
           >
-            Erase
+            Eraser
           </button>
         </div>
         <label style={labelStyle}>
@@ -166,14 +204,100 @@ export function ControlPanel({
             style={{ width: "100%" }}
           />
         </label>
+        <label style={labelStyle}>
+          Eraser size
+          <input
+            type="range"
+            min={4}
+            max={80}
+            value={eraserRadius}
+            disabled={busy}
+            onChange={(event) => onEraserRadiusChange(Number(event.target.value))}
+            style={{ width: "100%" }}
+          />
+        </label>
+        <label style={labelStyle}>
+          Expand / shrink amount
+          <input
+            type="range"
+            min={1}
+            max={8}
+            value={morphAmount}
+            disabled={busy}
+            onChange={(event) => onMorphAmountChange(Number(event.target.value))}
+            style={{ width: "100%" }}
+          />
+        </label>
+        <div style={buttonRowStyle}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onExpandMask}
+            style={toolButtonStyle(false)}
+          >
+            Expand
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onShrinkMask}
+            style={toolButtonStyle(false)}
+          >
+            Shrink
+          </button>
+        </div>
+        <label style={labelStyle}>
+          Feather preview
+          <input
+            type="range"
+            min={0}
+            max={24}
+            value={featherRadius}
+            disabled={busy}
+            onChange={(event) => onFeatherRadiusChange(Number(event.target.value))}
+            style={{ width: "100%" }}
+          />
+        </label>
+        <p style={hintStyle}>
+          Feather affects overlay and preview only. Inpainting still uses a hard bool mask.
+        </p>
+        <div style={buttonRowStyle}>
+          <button type="button" disabled={busy || !canUndo} onClick={onUndo} style={toolButtonStyle(false)}>
+            Undo
+          </button>
+          <button type="button" disabled={busy || !canRedo} onClick={onRedo} style={toolButtonStyle(false)}>
+            Redo
+          </button>
+        </div>
         <button
           type="button"
-          disabled={busy}
-          onClick={onClearMask}
+          disabled={busy || !hasAiMask}
+          onClick={onResetToAiMask}
           style={secondaryButtonStyle}
         >
+          Reset to AI mask
+        </button>
+        <button type="button" disabled={busy} onClick={onClearMask} style={secondaryButtonStyle}>
           Clear mask
         </button>
+        <label style={checkboxLabelStyle}>
+          <input
+            type="checkbox"
+            checked={showMaskOverlay}
+            disabled={busy}
+            onChange={(event) => onShowMaskOverlayChange(event.target.checked)}
+          />
+          Show mask overlay
+        </label>
+        <label style={checkboxLabelStyle}>
+          <input
+            type="checkbox"
+            checked={showMaskOnly}
+            disabled={busy}
+            onChange={(event) => onShowMaskOnlyChange(event.target.checked)}
+          />
+          Show mask only
+        </label>
       </section>
 
       <section>
@@ -214,8 +338,7 @@ export function ControlPanel({
           {busy ? "Applying…" : "Apply Instruction"}
         </button>
         <p style={hintStyle}>
-          Global full-frame edit via InstructPix2Pix (cloud). Does not use the mask
-          from selection above.
+          Global full-frame edit via InstructPix2Pix (cloud). Does not use the mask above.
         </p>
       </section>
 
@@ -231,8 +354,7 @@ export function ControlPanel({
           {busy ? "Generating…" : "Fill selected region"}
         </button>
         <p style={hintStyle}>
-          Mask-conditioned inpainting only. Text instructions for object replacement are not
-          supported by the current backend.
+          Sends the current edited bool mask to Moebius. Original image is never modified.
         </p>
       </section>
     </aside>
@@ -254,6 +376,15 @@ const labelStyle: React.CSSProperties = {
   gap: 6,
   fontSize: 14,
   color: "#cbd5e1",
+};
+
+const checkboxLabelStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 13,
+  color: "#cbd5e1",
+  marginTop: 8,
 };
 
 const hintStyle: React.CSSProperties = {

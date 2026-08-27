@@ -11,9 +11,15 @@ interface EditorCanvasProps {
   mask: Uint8Array | null;
   tool: EditorTool;
   brushRadius: number;
+  eraserRadius: number;
+  featherRadius: number;
+  showOverlay: boolean;
+  showMaskOnly: boolean;
   disabled: boolean;
   onPointSelect: (x: number, y: number) => void;
   onBrushStroke: (x: number, y: number, mode: "brush" | "erase") => void;
+  onStrokeStart: () => void;
+  onStrokeEnd: () => void;
 }
 
 export function EditorCanvas({
@@ -22,21 +28,30 @@ export function EditorCanvas({
   mask,
   tool,
   brushRadius,
+  eraserRadius,
+  featherRadius,
+  showOverlay,
+  showMaskOnly,
   disabled,
   onPointSelect,
   onBrushStroke,
+  onStrokeStart,
+  onStrokeEnd,
 }: EditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const layoutRef = useRef<ReturnType<typeof computeDisplayLayout> | null>(null);
   const paintingRef = useRef(false);
+  const strokeStartedRef = useRef(false);
+
+  const activeRadius = tool === "erase" ? eraserRadius : brushRadius;
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
     const img = imageRef.current;
-    if (!canvas || !container || !img || !imageSize) return;
+    if (!canvas || !container || !imageSize) return;
 
     const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -56,18 +71,47 @@ export function EditorCanvas({
     );
     layoutRef.current = layout;
 
-    ctx.drawImage(
-      img,
-      layout.offsetX,
-      layout.offsetY,
-      layout.renderedWidth,
-      layout.renderedHeight
-    );
-
-    if (mask) {
-      drawMaskOverlay(ctx, mask, imageSize.width, imageSize.height, layout);
+    if (showMaskOnly && mask) {
+      ctx.fillStyle = "#0f1115";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      const preview = document.createElement("canvas");
+      preview.width = imageSize.width;
+      preview.height = imageSize.height;
+      const pctx = preview.getContext("2d");
+      if (pctx) {
+        const imageData = pctx.createImageData(imageSize.width, imageSize.height);
+        for (let i = 0; i < mask.length; i += 1) {
+          const v = mask[i] ? 255 : 0;
+          const idx = i * 4;
+          imageData.data[idx] = v;
+          imageData.data[idx + 1] = v;
+          imageData.data[idx + 2] = v;
+          imageData.data[idx + 3] = 255;
+        }
+        pctx.putImageData(imageData, 0, 0);
+        ctx.drawImage(
+          preview,
+          layout.offsetX,
+          layout.offsetY,
+          layout.renderedWidth,
+          layout.renderedHeight
+        );
+      }
+    } else if (img) {
+      ctx.drawImage(
+        img,
+        layout.offsetX,
+        layout.offsetY,
+        layout.renderedWidth,
+        layout.renderedHeight
+      );
+      if (mask && showOverlay) {
+        drawMaskOverlay(ctx, mask, imageSize.width, imageSize.height, layout, {
+          featherRadius: featherRadius > 0 ? featherRadius : undefined,
+        });
+      }
     }
-  }, [imageSize, mask]);
+  }, [featherRadius, imageSize, mask, showMaskOnly, showOverlay]);
 
   useEffect(() => {
     if (!imageUrl) {
@@ -128,7 +172,12 @@ export function EditorCanvas({
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!imageUrl || disabled) return;
     paintingRef.current = true;
+    strokeStartedRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (tool === "brush" || tool === "erase") {
+      onStrokeStart();
+      strokeStartedRef.current = true;
+    }
     handlePointer(event.clientX, event.clientY, tool !== "select");
   };
 
@@ -138,7 +187,11 @@ export function EditorCanvas({
   };
 
   const onPointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (paintingRef.current && strokeStartedRef.current) {
+      onStrokeEnd();
+    }
     paintingRef.current = false;
+    strokeStartedRef.current = false;
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
@@ -207,7 +260,7 @@ export function EditorCanvas({
             color: "#cbd5e1",
           }}
         >
-          Brush size: {brushRadius}px
+          {tool === "erase" ? "Eraser" : "Brush"}: {activeRadius}px
         </div>
       ) : null}
     </div>

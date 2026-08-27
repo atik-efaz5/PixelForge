@@ -34,7 +34,6 @@ export async function decodeMaskPng(
   const { data } = ctx.getImageData(0, 0, width, height);
   const mask = new Uint8Array(width * height);
   for (let i = 0; i < width * height; i += 1) {
-    // White / bright pixels = inpaint.
     mask[i] = data[i * 4] >= MASK_THRESHOLD ? 1 : 0;
   }
   return mask;
@@ -43,6 +42,69 @@ export async function decodeMaskPng(
 /** Create an empty mask (all preserve). */
 export function createEmptyMask(width: number, height: number): Uint8Array {
   return new Uint8Array(width * height);
+}
+
+/** Deep copy of a mask buffer. */
+export function cloneMask(mask: Uint8Array): Uint8Array {
+  return new Uint8Array(mask);
+}
+
+/** Morphological dilation (expand mask). */
+export function dilateMask(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  iterations: number
+): Uint8Array {
+  if (iterations <= 0) return cloneMask(mask);
+  let out = cloneMask(mask);
+  for (let n = 0; n < iterations; n += 1) {
+    const next = new Uint8Array(out.length);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const idx = y * width + x;
+        if (out[idx]) {
+          next[idx] = 1;
+          continue;
+        }
+        let on = false;
+        for (let dy = -1; dy <= 1 && !on; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            if (out[ny * width + nx]) {
+              on = true;
+              break;
+            }
+          }
+        }
+        next[idx] = on ? 1 : 0;
+      }
+    }
+    out = next;
+  }
+  return out;
+}
+
+/** Morphological erosion (shrink mask). */
+export function erodeMask(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  iterations: number
+): Uint8Array {
+  if (iterations <= 0) return cloneMask(mask);
+  const inverted = new Uint8Array(mask.length);
+  for (let i = 0; i < mask.length; i += 1) {
+    inverted[i] = mask[i] ? 0 : 1;
+  }
+  const erodedInv = dilateMask(inverted, width, height, iterations);
+  const out = new Uint8Array(mask.length);
+  for (let i = 0; i < mask.length; i += 1) {
+    out[i] = erodedInv[i] ? 0 : 1;
+  }
+  return out;
 }
 
 /** Paint a circular brush stroke onto the mask. */
@@ -111,7 +173,8 @@ export function drawMaskOverlay(
   mask: Uint8Array,
   width: number,
   height: number,
-  layout: { offsetX: number; offsetY: number; scale: number; renderedWidth: number; renderedHeight: number }
+  layout: { offsetX: number; offsetY: number; scale: number; renderedWidth: number; renderedHeight: number },
+  options?: { featherRadius?: number }
 ): void {
   const overlay = document.createElement("canvas");
   overlay.width = width;
@@ -119,16 +182,35 @@ export function drawMaskOverlay(
   const octx = overlay.getContext("2d");
   if (!octx) return;
 
-  const imageData = octx.createImageData(width, height);
-  for (let i = 0; i < mask.length; i += 1) {
-    if (!mask[i]) continue;
-    const idx = i * 4;
-    imageData.data[idx] = 56;
-    imageData.data[idx + 1] = 189;
-    imageData.data[idx + 2] = 248;
-    imageData.data[idx + 3] = 140;
+  const feather = options?.featherRadius ?? 0;
+  if (feather > 0) {
+    const imageData = octx.createImageData(width, height);
+    const dist = computeFeatherDistances(mask, width, height, feather);
+    for (let i = 0; i < mask.length; i += 1) {
+      if (!mask[i] && dist[i] <= 0) continue;
+      const alpha = mask[i]
+        ? 180
+        : Math.max(0, Math.round(140 * (1 - dist[i] / feather)));
+      if (alpha <= 0) continue;
+      const idx = i * 4;
+      imageData.data[idx] = 56;
+      imageData.data[idx + 1] = 189;
+      imageData.data[idx + 2] = 248;
+      imageData.data[idx + 3] = alpha;
+    }
+    octx.putImageData(imageData, 0, 0);
+  } else {
+    const imageData = octx.createImageData(width, height);
+    for (let i = 0; i < mask.length; i += 1) {
+      if (!mask[i]) continue;
+      const idx = i * 4;
+      imageData.data[idx] = 56;
+      imageData.data[idx + 1] = 189;
+      imageData.data[idx + 2] = 248;
+      imageData.data[idx + 3] = 140;
+    }
+    octx.putImageData(imageData, 0, 0);
   }
-  octx.putImageData(imageData, 0, 0);
 
   ctx.drawImage(
     overlay,
@@ -137,6 +219,49 @@ export function drawMaskOverlay(
     layout.renderedWidth,
     layout.renderedHeight
   );
+}
+
+/** Distance from each pixel to the nearest inpaint pixel (for feather preview). */
+function computeFeatherDistances(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  maxRadius: number
+): Float32Array {
+  const dist = new Float32Array(mask.length);
+  dist.fill(maxRadius + 1);
+  const queue: number[] = [];
+  for (let i = 0; i < mask.length; i += 1) {
+    if (mask[i]) {
+      dist[i] = 0;
+      queue.push(i);
+    }
+  }
+  let head = 0;
+  while (head < queue.length) {
+    const idx = queue[head];
+    head += 1;
+    const x = idx % width;
+    const y = Math.floor(idx / width);
+    const base = dist[idx];
+    if (base >= maxRadius) continue;
+    const neighbors = [
+      [x - 1, y],
+      [x + 1, y],
+      [x, y - 1],
+      [x, y + 1],
+    ];
+    for (const [nx, ny] of neighbors) {
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const nidx = ny * width + nx;
+      const next = base + 1;
+      if (next < dist[nidx]) {
+        dist[nidx] = next;
+        queue.push(nidx);
+      }
+    }
+  }
+  return dist;
 }
 
 /** Check whether any inpaint pixels are set. */
@@ -151,7 +276,8 @@ export function maskHasInpaint(mask: Uint8Array): boolean {
 export function maskPreviewUrl(
   mask: Uint8Array,
   width: number,
-  height: number
+  height: number,
+  options?: { featherRadius?: number }
 ): string {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -159,14 +285,73 @@ export function maskPreviewUrl(
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
   const imageData = ctx.createImageData(width, height);
-  for (let i = 0; i < mask.length; i += 1) {
-    const v = mask[i] ? 255 : 0;
-    const idx = i * 4;
-    imageData.data[idx] = v;
-    imageData.data[idx + 1] = v;
-    imageData.data[idx + 2] = v;
-    imageData.data[idx + 3] = 255;
+  const feather = options?.featherRadius ?? 0;
+  if (feather > 0) {
+    const dist = computeFeatherDistances(mask, width, height, feather);
+    for (let i = 0; i < mask.length; i += 1) {
+      let v = 0;
+      if (mask[i]) {
+        v = 255;
+      } else if (dist[i] > 0 && dist[i] <= feather) {
+        v = Math.round(255 * (1 - dist[i] / feather));
+      }
+      const idx = i * 4;
+      imageData.data[idx] = v;
+      imageData.data[idx + 1] = v;
+      imageData.data[idx + 2] = v;
+      imageData.data[idx + 3] = 255;
+    }
+  } else {
+    for (let i = 0; i < mask.length; i += 1) {
+      const v = mask[i] ? 255 : 0;
+      const idx = i * 4;
+      imageData.data[idx] = v;
+      imageData.data[idx + 1] = v;
+      imageData.data[idx + 2] = v;
+      imageData.data[idx + 3] = 255;
+    }
   }
   ctx.putImageData(imageData, 0, 0);
   return canvas.toDataURL("image/png");
+}
+
+/** Bounded undo/redo history for mask edits. */
+export class MaskEditHistory {
+  private undoStack: Uint8Array[] = [];
+  private redoStack: Uint8Array[] = [];
+
+  constructor(private readonly maxEntries = 50) {}
+
+  canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
+
+  clear(): void {
+    this.undoStack = [];
+    this.redoStack = [];
+  }
+
+  push(mask: Uint8Array): void {
+    this.undoStack.push(cloneMask(mask));
+    this.redoStack = [];
+    if (this.undoStack.length > this.maxEntries) {
+      this.undoStack.shift();
+    }
+  }
+
+  undo(current: Uint8Array): Uint8Array | null {
+    if (!this.canUndo()) return null;
+    this.redoStack.push(cloneMask(current));
+    return this.undoStack.pop() ?? null;
+  }
+
+  redo(current: Uint8Array): Uint8Array | null {
+    if (!this.canRedo()) return null;
+    this.undoStack.push(cloneMask(current));
+    return this.redoStack.pop() ?? null;
+  }
 }
