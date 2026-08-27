@@ -1,6 +1,6 @@
 # Research Stack Plan
 
-STATUS: **2 OF 7 RUNTIME-VALIDATED — SAM 2 (`LOCAL_MPS` / `PASS`) AND MOEBIUS (`LOCAL_MPS` / `CONDITIONAL`). PIXELHACKER IS CLASSIFIED `CLOUD_GPU` (`LOCAL_MPS: FAIL`) BUT NOT RUNTIME-VALIDATED.**
+STATUS: **2 OF 7 RUNTIME-VALIDATED — SAM 2 (`LOCAL_MPS` / `PASS`) AND MOEBIUS (`LOCAL_MPS` / `CONDITIONAL`). GROUNDING DINO TEXT SELECTION IS VALIDATED (PHASE 11B). PIXELHACKER AND INSTRUCTPIX2PIX ARE CLASSIFIED `CLOUD_GPU` BUT NOT RUNTIME-VALIDATED.**
 
 All seven research components have been cloned and pinned to exact commit SHAs (see [`research/upstream/LOCKFILE.md`](upstream/LOCKFILE.md)). **Acquisition is not validation.** Phase 3 ran the SAM 2 gate on real hardware and returned `PASS`: real segmentation inference executed on the Apple M3 Pro GPU via MPS. SAM 2 is therefore `VALIDATED` / `LOCAL_MPS`. Phase 4 has now taken Moebius through the full gate and returned `CONDITIONAL`: real generative inpainting executed on the same GPU, all 11 checks passed, but student inference on Apple Silicon requires a documented PixelForge-side import-isolation workaround that does not alter the research method. Moebius is therefore `VALIDATED (CONDITIONAL)` / `LOCAL_MPS`. Phase 5 classified PixelHacker from the pinned source **without** a runtime gate: `LOCAL_MPS` is `FAIL`; primary placement is `CLOUD_GPU`, **not yet runtime-validated**. The remaining four `Status` fields still read `NOT YET VALIDATED`.
 
@@ -191,31 +191,52 @@ Full record: [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](../docs/experiments/
 
 ## 6. InstructPix2Pix
 
-**Purpose:** Instruction-based editing driven by natural-language edit instructions.
+**Purpose:** Instruction-based **global** image editing — `image + instruction → edited image` (e.g. *"make the sky sunset"*). Distinct from mask inpainting (Moebius / PixelHacker).
 
-**Execution:** TBD
+**Execution:** NVIDIA CUDA is hardcoded in the pinned inference entry points (`edit_cli.py`, `edit_app.py`). **Not executed in this project.**
 
-**Local/cloud:** TBD — NOT YET DETERMINED
+**Local/cloud:** **`CLOUD_GPU`**
 
-**Status:** **NOT YET VALIDATED**
+**Status:** **CLASSIFIED — 2026-08-27. NOT RUNTIME-VALIDATED.**
 
-**Target phase:** Phase 12. Not required for MVP.
+| Gate | Verdict |
+|---|---|
+| LOCAL_MPS | **NOT VALIDATED** — no MPS path in source; 18 GB unified memory unlikely at default settings |
+| CLOUD_GPU | **CONDITIONAL / NOT YET RUNTIME-VALIDATED** |
+| CPU | not a practical PixelForge target (not benchmarked) |
 
-**Notes:** Phase 2 recorded two constraints from the repository itself. Its README states the pipeline was *"tested on a GPU with >18GB VRAM"* — at or above this host's **entire** 18 GB unified memory pool, which is also shared with the OS. Its checkpoints derive from Stable Diffusion under **CreativeML Open RAIL-M**, a use-restricted license. Both point toward `CLOUD_GPU`, but neither is a measurement and the classification remains undetermined.
+**Target phase:** Phase 12A classification complete. Implementation **not** started.
+
+### Classified facts (Phase 12A, 2026-08-27)
+
+| Property | Value |
+|---|---|
+| Commit | `0dffd1eeb02611c35088462d1df88714ce2b52f4` (pinned; tree clean) |
+| Inference entry | `edit_cli.py` / `edit_app.py` |
+| Architecture | `LatentDiffusion` hybrid: CLIP text + concatenated source-image latents; SD 1.5–scale UNet (`in_channels=8`) |
+| Scheduler | Euler ancestral via **k-diffusion** |
+| Default resolution / steps | 512 (64-multiple) / 100 |
+| Mask support | **None** on upstream inference path |
+| Inference checkpoint | `instruct-pix2pix-00-22000.ckpt` (~7.7 GB per HF metadata; not downloaded) |
+| Base model lineage | Stable Diffusion v1.5 fine-tune |
+| License (code) | MIT (verbatim text) |
+| License (weights) | **CreativeML Open RAIL-M** via vendored `stable_diffusion/` |
+
+Full record: [`docs/experiments/INSTRUCT_PIX2PIX_FEASIBILITY.md`](../docs/experiments/INSTRUCT_PIX2PIX_FEASIBILITY.md).
 
 ## 7. Grounded-Segment-Anything
 
-**Purpose:** Open-vocabulary text-guided object grounding (including Grounding DINO) — natural-language selection such as "select the dog". Intended to produce candidate boxes that SAM 2 refines into masks.
+**Purpose:** Open-vocabulary text-guided object grounding (including Grounding DINO) — natural-language selection such as "select the dog". PixelForge uses **Grounding DINO + SAM 2** directly (not the full Grounded-SAM monolith).
 
-**Execution:** TBD
+**Execution:** Grounding DINO **CPU** (isolated env); SAM 2 **LOCAL_MPS**
 
-**Local/cloud:** TBD — NOT YET DETERMINED
+**Local/cloud:** Grounding **`CPU`**; selection path validated Phase 11B
 
-**Status:** **NOT YET VALIDATED**
+**Status:** **GROUNDING PATH VALIDATED (PHASE 11B)** — full Grounded-SAM repo **NOT YET VALIDATED**
 
-**Target phase:** Phase 11.
+**Target phase:** Phase 11 complete for text selection; full repo remains unaudited for other features.
 
-**Notes:** Confirmed at Phase 2: two git submodules are declared (`grounded-sam-osx`, `VISAM`) and both remain **uninitialized** by design. Historically ships CUDA-compiled extensions, so the dependency and device audits are expected to be the most involved of the seven. Upstream also documents a successor project pairing Grounding DINO with SAM 2 directly, which is worth evaluating as an alternative at Phase 11 given PixelForge already standardises on SAM 2.
+**Notes:** Phase 11B validated real Grounding DINO → SAM 2 box segmentation on this host. Two git submodules (`grounded-sam-osx`, `VISAM`) remain **uninitialized** by design. Full record: [`docs/experiments/GROUNDING_DINO_VALIDATION.md`](../docs/experiments/GROUNDING_DINO_VALIDATION.md).
 
 ---
 
@@ -228,10 +249,10 @@ Full record: [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](../docs/experiments/
 | 3 | Moebius | Inpainting | A | 4 | **VALIDATED (`CONDITIONAL`) — `LOCAL_MPS`** |
 | 4 | BrushNet | Inpainting | C | contingent | NOT YET VALIDATED |
 | 5 | ControlNet | Structural conditioning | Later | 12 | NOT YET VALIDATED |
-| 6 | InstructPix2Pix | Instruction editing | Later | 12 | NOT YET VALIDATED |
-| 7 | Grounded-Segment-Anything | Text-guided grounding | Later | 11 | NOT YET VALIDATED |
+| 6 | InstructPix2Pix | Instruction editing | Later | 12A | **CLASSIFIED `CLOUD_GPU` — not runtime-validated** |
+| 7 | Grounded-Segment-Anything | Text-guided grounding | Later | 11 | **Grounding DINO path validated (11B); full repo not validated** |
 
-**2 of 7 runtime-validated. 3 of 7 classified. 7 of 7 acquired and pinned.**
+**2 of 7 runtime-validated (SAM 2, Moebius). 4 of 7 classified or partially validated. 7 of 7 acquired and pinned.**
 
 ## MVP dependency
 
