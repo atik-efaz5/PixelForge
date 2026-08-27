@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse, Response
 from apps.backend.dependencies import configure_cors, get_editing_service
 from apps.backend.errors import register_exception_handlers
 from apps.backend.schemas import (
+    EditingCapabilitiesResponse,
+    EditingCapabilityEntry,
     HealthResponse,
     InpaintMetadata,
     ModelsResponse,
@@ -61,6 +63,17 @@ def build_router():
         service: Annotated[ImageEditingService, Depends(get_editing_service)],
     ) -> ModelsResponse:
         return ModelsResponse(models=[ModelInfo(**entry) for entry in service.list_models()])
+
+    @router.get("/capabilities", response_model=EditingCapabilitiesResponse)
+    def capabilities(
+        service: Annotated[ImageEditingService, Depends(get_editing_service)],
+    ) -> EditingCapabilitiesResponse:
+        return EditingCapabilitiesResponse(
+            capabilities=[
+                EditingCapabilityEntry(**entry)
+                for entry in service.list_editing_capabilities()
+            ]
+        )
 
     @router.post("/segment")
     async def segment(

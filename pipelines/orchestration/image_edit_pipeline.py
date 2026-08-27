@@ -30,8 +30,14 @@ from models.types import (
     validate_image,
     validate_mask,
 )
-from pipelines.errors import PipelineBackendError, PipelinePromptError, PipelineValidationError
+from pipelines.errors import (
+    PipelineBackendError,
+    PipelinePromptError,
+    PipelineValidationError,
+    UnsupportedEditIntentError,
+)
 from pipelines.mask_refinement import refine_mask, require_non_empty_mask
+from pipelines.editing_capabilities import EditIntent, localized_edit_supported
 from pipelines.types import ImageEditPipelineResult, MaskRefinementOps, PipelineLatency
 
 logger = logging.getLogger(__name__)
@@ -210,6 +216,35 @@ class ImageEditPipeline:
             result.latency_ms,
         )
         return result
+
+    def edit_localized(
+        self,
+        image: np.ndarray,
+        mask: np.ndarray,
+        *,
+        backend: str = "moebius",
+        params: InpaintParams | None = None,
+        instruction: str | None = None,
+    ) -> InpaintingResult:
+        """Localized mask-conditioned edit (fill/remove). Does not accept text instructions."""
+        if instruction is not None and instruction.strip():
+            raise UnsupportedEditIntentError(
+                f"Backend '{backend}' does not accept text instructions. "
+                "Use localized inpainting on the selected mask only."
+            )
+        if not localized_edit_supported(backend):
+            raise PipelineBackendError(
+                f"Backend '{backend}' does not support localized mask editing."
+            )
+        image = validate_image(image)
+        mask = validate_mask(mask, image=image)
+        logger.info(
+            "edit_localized_start backend=%s intent=%s mask_area=%d",
+            backend,
+            EditIntent.LOCALIZED_INPAINT.value,
+            int(mask.sum()),
+        )
+        return self.inpaint(image, mask, backend=backend, params=params)
 
     def remove_object(
         self,

@@ -25,6 +25,7 @@ from models.types import (
     validate_image,
     validate_mask,
 )
+from pipelines.editing_capabilities import BACKEND_EDIT_CAPABILITIES, EditIntent
 from pipelines.orchestration.image_edit_pipeline import ImageEditPipeline
 from pipelines.types import ImageEditPipelineResult, MaskRefinementOps
 
@@ -72,6 +73,46 @@ class ImageEditingService:
                 }
             )
         return entries
+
+    def list_editing_capabilities(self) -> list[dict[str, Any]]:
+        """Declare which edit intents each inpainting backend actually supports."""
+        rows: list[dict[str, Any]] = []
+        for backend_id, cap in BACKEND_EDIT_CAPABILITIES.items():
+            rows.append(
+                {
+                    "backend_id": backend_id,
+                    "localized_inpaint": EditIntent.LOCALIZED_INPAINT.value
+                    in {i.value for i in cap.supported_intents},
+                    "semantic_replace": EditIntent.SEMANTIC_REPLACE.value
+                    in {i.value for i in cap.supported_intents},
+                    "accepts_text_instruction": cap.accepts_text_instruction,
+                    "accepts_reference_image": cap.accepts_reference_image,
+                    "notes": cap.notes,
+                }
+            )
+        return rows
+
+    def edit_localized(
+        self,
+        image: np.ndarray,
+        mask: np.ndarray,
+        *,
+        backend: str = "moebius",
+        params: InpaintParams | None = None,
+    ) -> InpaintingResult:
+        """Localized mask edit only. Rejects non-empty text instructions at the pipeline layer."""
+        logger.info("service_edit_localized backend=%s", backend)
+        try:
+            return self._pipeline.edit_localized(
+                image, mask, backend=backend, params=params
+            )
+        except ModelLoadError as exc:
+            if backend.strip().lower() != "moebius":
+                raise
+            logger.warning(
+                "in-process Moebius load failed; using isolated env: %s", exc
+            )
+            return inpaint_via_isolated_env(image, mask, params=params)
 
     def segment(self, image: np.ndarray, x: int, y: int) -> SegmentationResult:
         logger.info("service_segment x=%d y=%d", x, y)

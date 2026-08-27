@@ -72,3 +72,20 @@ class SelectByTextMetadata(BaseModel):
     selected_box_xyxy: list[float]
     detections: list[dict[str, Any]] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class EditingCapabilityEntry(BaseModel):
+    """Declared edit intents for one inpainting backend."""
+
+    backend_id: str
+    localized_inpaint: bool
+    semantic_replace: bool
+    accepts_text_instruction: bool
+    accepts_reference_image: bool
+    notes: str
+
+
+class EditingCapabilitiesResponse(BaseModel):
+    """JSON response for ``GET /capabilities``."""
+
+    capabilities: list[EditingCapabilityEntry]

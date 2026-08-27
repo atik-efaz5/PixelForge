@@ -15,7 +15,12 @@ from models.errors import (
     ModelUnavailableError,
     PixelForgeModelError,
 )
-from pipelines.errors import PipelineBackendError, PipelinePromptError, PipelineValidationError
+from pipelines.errors import (
+    PipelineBackendError,
+    PipelinePromptError,
+    PipelineValidationError,
+    UnsupportedEditIntentError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +68,15 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=400,
             content=error_body("unsupported_backend", str(exc)),
+        )
+
+    @app.exception_handler(UnsupportedEditIntentError)
+    async def _unsupported_edit_intent(
+        _request: Request, exc: UnsupportedEditIntentError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=400,
+            content=error_body("unsupported_edit_intent", str(exc)),
         )
 
     @app.exception_handler(ValueError)

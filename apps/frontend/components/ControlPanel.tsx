@@ -187,8 +187,12 @@ export function ControlPanel({
           style={primaryButtonStyle}
           aria-busy={busy}
         >
-          {busy ? "Generating…" : "Generate"}
+          {busy ? "Generating…" : "Fill selected region"}
         </button>
+        <p style={hintStyle}>
+          Mask-conditioned inpainting only. Text instructions for object replacement are not
+          supported by the current backend.
+        </p>
       </section>
     </aside>
   );

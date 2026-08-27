@@ -11,3 +11,7 @@ class PipelineBackendError(ValueError):
 
 class PipelinePromptError(ValueError):
     """Invalid or empty text prompt."""
+
+
+class UnsupportedEditIntentError(ValueError):
+    """Requested edit intent is not supported by the chosen backend."""
