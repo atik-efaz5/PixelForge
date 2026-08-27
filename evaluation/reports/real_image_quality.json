@@ -1,0 +1,2701 @@
+{
+  "evaluation_id": "real_image_quality_v1",
+  "phase": "20",
+  "status": "COMPLETE",
+  "timestamp_utc": "2026-08-27T03:50:08.687369+00:00",
+  "pixelforge_commit": "efefa0d3b4493fa4b8299104bd2679fbda515b61",
+  "hardware": {
+    "platform": "macOS-15.7.9-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "processor": "Apple M3 Pro",
+    "physical_cores": "11",
+    "logical_cores": "11",
+    "unified_memory_bytes": "19327352832"
+  },
+  "environments": {
+    "sam2": {
+      "conda_env": "pixelforge-sam2-v2",
+      "python": "/opt/anaconda3/envs/pixelforge-sam2-v2/bin/python",
+      "available": true
+    },
+    "grounding": {
+      "conda_env": "pixelforge-grounding-dino",
+      "python": "/opt/anaconda3/envs/pixelforge-grounding-dino/bin/python",
+      "available": true
+    },
+    "sam2_box": {
+      "conda_env": "pixelforge-sam2-v2",
+      "python": "/opt/anaconda3/envs/pixelforge-sam2-v2/bin/python",
+      "available": true
+    },
+    "moebius": {
+      "conda_env": "pixelforge-moebius",
+      "python": "/opt/anaconda3/envs/pixelforge-moebius/bin/python",
+      "available": true
+    },
+    "e2e": {
+      "conda_env": "pixelforge-sam2-v2",
+      "python": "/opt/anaconda3/envs/pixelforge-sam2-v2/bin/python",
+      "available": true
+    }
+  },
+  "model_commits": {
+    "sam2": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+    "moebius": "b88d462bacb9af6e7128a3b4cc4a07418bedfd61",
+    "grounding_dino": "126abe633ffe333e16e4a0a4e946bc1003caf757"
+  },
+  "methodology": {
+    "image_source": "deterministic locally generated 512\u00d7512 scenes (no external dataset downloads)",
+    "categories": [
+      "person",
+      "vehicle",
+      "furniture",
+      "outdoor_scene",
+      "textured_background",
+      "adjacent_objects",
+      "cluttered_scene"
+    ],
+    "warm_repeats": 1,
+    "inpaint_cases": [
+      "real01_person",
+      "real02_vehicle",
+      "real06_adjacent"
+    ],
+    "ground_truth_policy": "Constructed analytic reference masks for all cases; IoU/F1/boundary metrics are valid against these synthetic GT masks only",
+    "preservation_note": "outside_mask_preservation is a pixel-level metric, not human quality"
+  },
+  "test_cases": [
+    {
+      "case_id": "real01_person",
+      "category": "person",
+      "description": "Stylized person silhouette on outdoor path",
+      "resolution": "512x512",
+      "point_xy": [
+        256,
+        240
+      ],
+      "text_prompt": "blue shirt person",
+      "target_object": "person",
+      "expected_region": "head, torso, and legs of central figure",
+      "run_inpaint": true,
+      "seed": 20001,
+      "image_sha256": "7499b40f1978d48ac466f5190e58511168156333b19cd234d0e43d74e662a895",
+      "reference_mask_sha256": "190d96bc2ace1060a8887bbd27966e09973be911190b43987459244e568dde27",
+      "has_reference_mask": true,
+      "ground_truth_justification": "Analytic mask for constructed target region in deterministic scene",
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real01_person.png",
+      "reference_mask_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real01_person_reference_mask.png"
+    },
+    {
+      "case_id": "real02_vehicle",
+      "category": "vehicle",
+      "description": "Red car on gray road under sky",
+      "resolution": "512x512",
+      "point_xy": [
+        255,
+        335
+      ],
+      "text_prompt": "red car",
+      "target_object": "car",
+      "expected_region": "red vehicle body, cabin, and wheels",
+      "run_inpaint": true,
+      "seed": 20001,
+      "image_sha256": "9dd8802fb94aae616c1f937b7909c90f0be0a2f9513e5e1f1b1ef788e526fbe9",
+      "reference_mask_sha256": "b7da7b4e43a52259cc2d259fd186ecb15acddd7a17cccb0b6ea41b711696e555",
+      "has_reference_mask": true,
+      "ground_truth_justification": "Analytic mask for constructed target region in deterministic scene",
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real02_vehicle.png",
+      "reference_mask_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real02_vehicle_reference_mask.png"
+    },
+    {
+      "case_id": "real03_furniture",
+      "category": "furniture",
+      "description": "Wooden chair in indoor corner",
+      "resolution": "512x512",
+      "point_xy": [
+        245,
+        270
+      ],
+      "text_prompt": "wooden chair",
+      "target_object": "chair",
+      "expected_region": "chair seat, back, and legs",
+      "run_inpaint": false,
+      "seed": 20001,
+      "image_sha256": "96b7ccc02787be131ae887e64e71b4a223961057e3b86260d5980afa03946cbc",
+      "reference_mask_sha256": "c04c2b943d58da8d7526a93790098227c7b0b802f9fb6e6e7f202fa243643cb3",
+      "has_reference_mask": true,
+      "ground_truth_justification": "Analytic mask for constructed target region in deterministic scene",
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real03_furniture.png",
+      "reference_mask_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real03_furniture_reference_mask.png"
+    },
+    {
+      "case_id": "real04_outdoor",
+      "category": "outdoor_scene",
+      "description": "Single tree on grassy field",
+      "resolution": "512x512",
+      "point_xy": [
+        330,
+        200
+      ],
+      "text_prompt": "green tree",
+      "target_object": "tree",
+      "expected_region": "tree trunk and foliage",
+      "run_inpaint": false,
+      "seed": 20001,
+      "image_sha256": "ad18b7fecbffecc47225b8c185bd93b8d0323de0389f47f56b70d29b3bc8742a",
+      "reference_mask_sha256": "cb06ba64376197a1ca0bceb7e9f6acd830a69c1820db7059f58ad0ccacc13b46",
+      "has_reference_mask": true,
+      "ground_truth_justification": "Analytic mask for constructed target region in deterministic scene",
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real04_outdoor.png",
+      "reference_mask_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real04_outdoor_reference_mask.png"
+    },
+    {
+      "case_id": "real05_textured",
+      "category": "textured_background",
+      "description": "White mug on table against brick-like texture",
+      "resolution": "512x512",
+      "point_xy": [
+        256,
+        310
+      ],
+      "text_prompt": "white mug",
+      "target_object": "mug",
+      "expected_region": "white mug body and handle",
+      "run_inpaint": false,
+      "seed": 20001,
+      "image_sha256": "1226475e9973b674ad304eaa91e3569cbeb3b284f23f01ada2188bf11d96d1e8",
+      "reference_mask_sha256": "0d5b13244eebfea5b1339f51e8415b21696063dfb5b07f77ec41eb5690912004",
+      "has_reference_mask": true,
+      "ground_truth_justification": "Analytic mask for constructed target region in deterministic scene",
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real05_textured.png",
+      "reference_mask_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real05_textured_reference_mask.png"
+    },
+    {
+      "case_id": "real06_adjacent",
+      "category": "adjacent_objects",
+      "description": "Red ball touching green ball \u2014 selection ambiguity",
+      "resolution": "512x512",
+      "point_xy": [
+        190,
+        256
+      ],
+      "text_prompt": "red ball",
+      "target_object": "red ball",
+      "expected_region": "left red ball only, not green neighbor",
+      "run_inpaint": true,
+      "seed": 20001,
+      "image_sha256": "608fe7896feb8d1c4a68e86d08835f33b04d182dc0b0e1a9579bf4c088d46d77",
+      "reference_mask_sha256": "790494f0df71f709e8fe8b8443c44bc4d0fa4d0ffb0ebcf04b8135eff725c04a",
+      "has_reference_mask": true,
+      "ground_truth_justification": "Analytic mask for constructed target region in deterministic scene",
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real06_adjacent.png",
+      "reference_mask_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real06_adjacent_reference_mask.png"
+    },
+    {
+      "case_id": "real07_cluttered",
+      "category": "cluttered_scene",
+      "description": "Red book beside blue pen on desk",
+      "resolution": "512x512",
+      "point_xy": [
+        215,
+        275
+      ],
+      "text_prompt": "red book",
+      "target_object": "book",
+      "expected_region": "red book only, not the nearby pen",
+      "run_inpaint": false,
+      "seed": 20001,
+      "image_sha256": "268cb39f3269a0cf47db1e1da2f6be3e79a85e3582764e6138f50ae742e25e23",
+      "reference_mask_sha256": "5d6a6c081cb8460213e494f14c971c30b7dd7c71bc4a67608663c672246313a4",
+      "has_reference_mask": true,
+      "ground_truth_justification": "Analytic mask for constructed target region in deterministic scene",
+      "image_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real07_cluttered.png",
+      "reference_mask_path": "/Users/atik/Projects/PixelForge/outputs/real_image_eval/real07_cluttered_reference_mask.png"
+    }
+  ],
+  "selection": {
+    "click_sam2": {
+      "status": "MEASURED",
+      "workflow": "click_sam2",
+      "device": "mps",
+      "model_load_ms": 1877.358,
+      "peak_rss_mib": 616.38,
+      "mps_driver_mib": 5.7,
+      "cases": [
+        {
+          "case_id": "real01_person",
+          "workflow": "click_sam2",
+          "device": "mps",
+          "model": "SAM 2.1 Hiera-Tiny",
+          "point_xy": [
+            256,
+            240
+          ],
+          "model_load_ms": 1877.358,
+          "cold_segmentation_ms": 998.121,
+          "warm_segmentation_ms": {
+            "best": 203.815,
+            "mean": 203.815,
+            "samples": 1
+          },
+          "confidence": 0.9689157605171204,
+          "mask_area_pixels": 8089,
+          "mask_area_ratio": 0.030857,
+          "mask_sha256": "7a476d666986f4db0d3ea50132ba70cee2a8f842710a5abab69f57542675122e",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.030857086181640625,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.41996781060173405,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 1.0,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.41996781060173405,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.5915173674588665,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.24515824279641002,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.75484175720359,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": 20001,
+            "parameters": {
+              "point_xy": [
+                256,
+                240
+              ]
+            },
+            "hashes": {
+              "image_sha256": "7499b40f1978d48ac466f5190e58511168156333b19cd234d0e43d74e662a895",
+              "mask_sha256": "7a476d666986f4db0d3ea50132ba70cee2a8f842710a5abab69f57542675122e",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real02_vehicle",
+          "workflow": "click_sam2",
+          "device": "mps",
+          "model": "SAM 2.1 Hiera-Tiny",
+          "point_xy": [
+            255,
+            335
+          ],
+          "model_load_ms": null,
+          "cold_segmentation_ms": 191.658,
+          "warm_segmentation_ms": {
+            "best": 207.652,
+            "mean": 207.652,
+            "samples": 1
+          },
+          "confidence": 0.9002236723899841,
+          "mask_area_pixels": 4131,
+          "mask_area_ratio": 0.015759,
+          "mask_sha256": "53489ea2b6a742e0053b6aa1d57efd80525ace04dbe5d46e886a9d583a41470e",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.015758514404296875,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.2776209677419355,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 1.0,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.2776209677419355,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.4345905002367051,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.05361930294906166,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.9463806970509383,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": 20001,
+            "parameters": {
+              "point_xy": [
+                255,
+                335
+              ]
+            },
+            "hashes": {
+              "image_sha256": "9dd8802fb94aae616c1f937b7909c90f0be0a2f9513e5e1f1b1ef788e526fbe9",
+              "mask_sha256": "53489ea2b6a742e0053b6aa1d57efd80525ace04dbe5d46e886a9d583a41470e",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real03_furniture",
+          "workflow": "click_sam2",
+          "device": "mps",
+          "model": "SAM 2.1 Hiera-Tiny",
+          "point_xy": [
+            245,
+            270
+          ],
+          "model_load_ms": null,
+          "cold_segmentation_ms": 216.374,
+          "warm_segmentation_ms": {
+            "best": 219.874,
+            "mean": 219.874,
+            "samples": 1
+          },
+          "confidence": 0.9618142247200012,
+          "mask_area_pixels": 9704,
+          "mask_area_ratio": 0.037018,
+          "mask_sha256": "6cad7e4f92e0843f70cbc226c2f980c524dca7dcc20c53a357adeb74e02570f1",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.037017822265625,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9964047252182845,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9995877988458368,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.9968143047990957,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.9981991252894263,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9598643301300169,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.04013566986998304,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": 20001,
+            "parameters": {
+              "point_xy": [
+                245,
+                270
+              ]
+            },
+            "hashes": {
+              "image_sha256": "96b7ccc02787be131ae887e64e71b4a223961057e3b86260d5980afa03946cbc",
+              "mask_sha256": "6cad7e4f92e0843f70cbc226c2f980c524dca7dcc20c53a357adeb74e02570f1",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real04_outdoor",
+          "workflow": "click_sam2",
+          "device": "mps",
+          "model": "SAM 2.1 Hiera-Tiny",
+          "point_xy": [
+            330,
+            200
+          ],
+          "model_load_ms": null,
+          "cold_segmentation_ms": 216.917,
+          "warm_segmentation_ms": {
+            "best": 219.761,
+            "mean": 219.761,
+            "samples": 1
+          },
+          "confidence": 0.9768400192260742,
+          "mask_area_pixels": 22518,
+          "mask_area_ratio": 0.085899,
+          "mask_sha256": "3f1099602f79d7f94b736943fe03c57b1c1d093fdb51e44234d4309d7985bca4",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.08589935302734375,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.805509838998211,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9998223643307577,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.8056251341873614,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.892279644895371,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.5109108159392789,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.48908918406072105,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": 20001,
+            "parameters": {
+              "point_xy": [
+                330,
+                200
+              ]
+            },
+            "hashes": {
+              "image_sha256": "ad18b7fecbffecc47225b8c185bd93b8d0323de0389f47f56b70d29b3bc8742a",
+              "mask_sha256": "3f1099602f79d7f94b736943fe03c57b1c1d093fdb51e44234d4309d7985bca4",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real05_textured",
+          "workflow": "click_sam2",
+          "device": "mps",
+          "model": "SAM 2.1 Hiera-Tiny",
+          "point_xy": [
+            256,
+            310
+          ],
+          "model_load_ms": null,
+          "cold_segmentation_ms": 217.087,
+          "warm_segmentation_ms": {
+            "best": 217.559,
+            "mean": 217.559,
+            "samples": 1
+          },
+          "confidence": 0.9792784452438354,
+          "mask_area_pixels": 7803,
+          "mask_area_ratio": 0.029766,
+          "mask_sha256": "2b4b837d93ed9ccb95d1647b53c879c06dd85376e01f9175c050fd37a3bb0712",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.029766082763671875,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9918001281229981,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9920543380750994,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.9997417021826166,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.9958831853853082,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.8587319243604005,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.14126807563959956,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": 20001,
+            "parameters": {
+              "point_xy": [
+                256,
+                310
+              ]
+            },
+            "hashes": {
+              "image_sha256": "1226475e9973b674ad304eaa91e3569cbeb3b284f23f01ada2188bf11d96d1e8",
+              "mask_sha256": "2b4b837d93ed9ccb95d1647b53c879c06dd85376e01f9175c050fd37a3bb0712",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real06_adjacent",
+          "workflow": "click_sam2",
+          "device": "mps",
+          "model": "SAM 2.1 Hiera-Tiny",
+          "point_xy": [
+            190,
+            256
+          ],
+          "model_load_ms": null,
+          "cold_segmentation_ms": 215.678,
+          "warm_segmentation_ms": {
+            "best": 215.083,
+            "mean": 215.083,
+            "samples": 1
+          },
+          "confidence": 0.9596951603889465,
+          "mask_area_pixels": 10865,
+          "mask_area_ratio": 0.041447,
+          "mask_sha256": "700bd236fd239bda01fa8f78134e4a0dbe5a077dda510661a56857b4eefc4f1f",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.041446685791015625,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9003647214854111,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9997238840312932,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.9005886742392837,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.9475704440373375,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.6507936507936508,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.3492063492063492,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": 20001,
+            "parameters": {
+              "point_xy": [
+                190,
+                256
+              ]
+            },
+            "hashes": {
+              "image_sha256": "608fe7896feb8d1c4a68e86d08835f33b04d182dc0b0e1a9579bf4c088d46d77",
+              "mask_sha256": "700bd236fd239bda01fa8f78134e4a0dbe5a077dda510661a56857b4eefc4f1f",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real07_cluttered",
+          "workflow": "click_sam2",
+          "device": "mps",
+          "model": "SAM 2.1 Hiera-Tiny",
+          "point_xy": [
+            215,
+            275
+          ],
+          "model_load_ms": null,
+          "cold_segmentation_ms": 215.595,
+          "warm_segmentation_ms": {
+            "best": 217.526,
+            "mean": 217.526,
+            "samples": 1
+          },
+          "confidence": 0.966536819934845,
+          "mask_area_pixels": 6460,
+          "mask_area_ratio": 0.024643,
+          "mask_sha256": "697a2fc2b099e3a8ec7d07bb5834f81b6713da738271787e6c1b9ec946afa4c6",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.0246429443359375,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9989170792079208,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9995356037151703,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.9993809007893515,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.999458246265769,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9655172413793104,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.034482758620689655,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": 20001,
+            "parameters": {
+              "point_xy": [
+                215,
+                275
+              ]
+            },
+            "hashes": {
+              "image_sha256": "268cb39f3269a0cf47db1e1da2f6be3e79a85e3582764e6138f50ae742e25e23",
+              "mask_sha256": "697a2fc2b099e3a8ec7d07bb5834f81b6713da738271787e6c1b9ec946afa4c6",
+              "output_sha256": null
+            }
+          }
+        }
+      ],
+      "qualitative": [
+        {
+          "case_id": "real01_person",
+          "category": "person",
+          "workflow": "click_sam2",
+          "target_object": "person",
+          "mask_area_ratio": 0.030857,
+          "reference_iou": 0.41996781060173405,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.420 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real02_vehicle",
+          "category": "vehicle",
+          "workflow": "click_sam2",
+          "target_object": "car",
+          "mask_area_ratio": 0.015759,
+          "reference_iou": 0.2776209677419355,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.278 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real03_furniture",
+          "category": "furniture",
+          "workflow": "click_sam2",
+          "target_object": "chair",
+          "mask_area_ratio": 0.037018,
+          "reference_iou": 0.9964047252182845,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.996 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real04_outdoor",
+          "category": "outdoor_scene",
+          "workflow": "click_sam2",
+          "target_object": "tree",
+          "mask_area_ratio": 0.085899,
+          "reference_iou": 0.805509838998211,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.806 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real05_textured",
+          "category": "textured_background",
+          "workflow": "click_sam2",
+          "target_object": "mug",
+          "mask_area_ratio": 0.029766,
+          "reference_iou": 0.9918001281229981,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.992 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real06_adjacent",
+          "category": "adjacent_objects",
+          "workflow": "click_sam2",
+          "target_object": "red ball",
+          "mask_area_ratio": 0.041447,
+          "reference_iou": 0.9003647214854111,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.900 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real07_cluttered",
+          "category": "cluttered_scene",
+          "workflow": "click_sam2",
+          "target_object": "book",
+          "mask_area_ratio": 0.024643,
+          "reference_iou": 0.9989170792079208,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.999 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        }
+      ]
+    },
+    "text_grounding": {
+      "status": "MEASURED",
+      "workflow": "text_grounding",
+      "device": "cpu",
+      "model_load_ms": 6511.021,
+      "peak_rss_mib": 2190.36,
+      "cases": [
+        {
+          "case_id": "real01_person",
+          "workflow": "text_grounding",
+          "device": "cpu",
+          "model": "Grounding DINO SwinT OGC",
+          "prompt": "blue shirt person",
+          "model_load_ms": 6511.021,
+          "grounding_latency_ms": 3008.482,
+          "detection_count": 3,
+          "detections": [
+            {
+              "index": 0,
+              "label": "blue shirt person",
+              "confidence": 0.527938,
+              "box_xyxy": [
+                211.89012145996094,
+                203.86529541015625,
+                300.9273376464844,
+                392.09674072265625
+              ]
+            },
+            {
+              "index": 1,
+              "label": "blue shirt person",
+              "confidence": 0.323902,
+              "box_xyxy": [
+                211.2169189453125,
+                131.4547576904297,
+                301.8795166015625,
+                392.264892578125
+              ]
+            },
+            {
+              "index": 2,
+              "label": "blue shirt person",
+              "confidence": 0.3399,
+              "box_xyxy": [
+                212.54220581054688,
+                204.11276245117188,
+                300.1947326660156,
+                301.46734619140625
+              ]
+            }
+          ],
+          "selected_box_xyxy": [
+            211.89012145996094,
+            203.86529541015625,
+            300.9273376464844,
+            392.09674072265625
+          ],
+          "selected_confidence": 0.527938,
+          "metrics": [
+            {
+              "name": "detection_count",
+              "value": 3.0,
+              "kind": "MEASURED"
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "grounding_dino",
+            "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+            "backend": "CPU",
+            "device": "cpu",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "prompt": "blue shirt person"
+            },
+            "hashes": {
+              "image_sha256": "7499b40f1978d48ac466f5190e58511168156333b19cd234d0e43d74e662a895",
+              "mask_sha256": null,
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real02_vehicle",
+          "workflow": "text_grounding",
+          "device": "cpu",
+          "model": "Grounding DINO SwinT OGC",
+          "prompt": "red car",
+          "model_load_ms": null,
+          "grounding_latency_ms": 2726.922,
+          "detection_count": 1,
+          "detections": [
+            {
+              "index": 0,
+              "label": "red car",
+              "confidence": 0.939219,
+              "box_xyxy": [
+                148.47781372070312,
+                298.2867431640625,
+                361.1365661621094,
+                396.14300537109375
+              ]
+            }
+          ],
+          "selected_box_xyxy": [
+            148.47781372070312,
+            298.2867431640625,
+            361.1365661621094,
+            396.14300537109375
+          ],
+          "selected_confidence": 0.939219,
+          "metrics": [
+            {
+              "name": "detection_count",
+              "value": 1.0,
+              "kind": "MEASURED"
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "grounding_dino",
+            "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+            "backend": "CPU",
+            "device": "cpu",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "prompt": "red car"
+            },
+            "hashes": {
+              "image_sha256": "9dd8802fb94aae616c1f937b7909c90f0be0a2f9513e5e1f1b1ef788e526fbe9",
+              "mask_sha256": null,
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real03_furniture",
+          "workflow": "text_grounding",
+          "device": "cpu",
+          "model": "Grounding DINO SwinT OGC",
+          "prompt": "wooden chair",
+          "model_load_ms": null,
+          "grounding_latency_ms": 2703.379,
+          "detection_count": 1,
+          "detections": [
+            {
+              "index": 0,
+              "label": "wooden chair",
+              "confidence": 0.946392,
+              "box_xyxy": [
+                198.24147033691406,
+                148.08506774902344,
+                311.81005859375,
+                380.8497314453125
+              ]
+            }
+          ],
+          "selected_box_xyxy": [
+            198.24147033691406,
+            148.08506774902344,
+            311.81005859375,
+            380.8497314453125
+          ],
+          "selected_confidence": 0.946392,
+          "metrics": [
+            {
+              "name": "detection_count",
+              "value": 1.0,
+              "kind": "MEASURED"
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "grounding_dino",
+            "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+            "backend": "CPU",
+            "device": "cpu",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "prompt": "wooden chair"
+            },
+            "hashes": {
+              "image_sha256": "96b7ccc02787be131ae887e64e71b4a223961057e3b86260d5980afa03946cbc",
+              "mask_sha256": null,
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real04_outdoor",
+          "workflow": "text_grounding",
+          "device": "cpu",
+          "model": "Grounding DINO SwinT OGC",
+          "prompt": "green tree",
+          "model_load_ms": null,
+          "grounding_latency_ms": 2686.623,
+          "detection_count": 2,
+          "detections": [
+            {
+              "index": 0,
+              "label": "green tree",
+              "confidence": 0.63793,
+              "box_xyxy": [
+                244.78053283691406,
+                103.75791931152344,
+                416.44317626953125,
+                391.32373046875
+              ]
+            },
+            {
+              "index": 1,
+              "label": "green tree",
+              "confidence": 0.316351,
+              "box_xyxy": [
+                245.02035522460938,
+                103.82638549804688,
+                416.0594177246094,
+                275.9637756347656
+              ]
+            }
+          ],
+          "selected_box_xyxy": [
+            244.78053283691406,
+            103.75791931152344,
+            416.44317626953125,
+            391.32373046875
+          ],
+          "selected_confidence": 0.63793,
+          "metrics": [
+            {
+              "name": "detection_count",
+              "value": 2.0,
+              "kind": "MEASURED"
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "grounding_dino",
+            "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+            "backend": "CPU",
+            "device": "cpu",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "prompt": "green tree"
+            },
+            "hashes": {
+              "image_sha256": "ad18b7fecbffecc47225b8c185bd93b8d0323de0389f47f56b70d29b3bc8742a",
+              "mask_sha256": null,
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real05_textured",
+          "workflow": "text_grounding",
+          "device": "cpu",
+          "model": "Grounding DINO SwinT OGC",
+          "prompt": "white mug",
+          "model_load_ms": null,
+          "grounding_latency_ms": 2896.083,
+          "detection_count": 1,
+          "detections": [
+            {
+              "index": 0,
+              "label": "white mug",
+              "confidence": 0.870556,
+              "box_xyxy": [
+                207.2222900390625,
+                260.71929931640625,
+                321.050537109375,
+                359.45068359375
+              ]
+            }
+          ],
+          "selected_box_xyxy": [
+            207.2222900390625,
+            260.71929931640625,
+            321.050537109375,
+            359.45068359375
+          ],
+          "selected_confidence": 0.870556,
+          "metrics": [
+            {
+              "name": "detection_count",
+              "value": 1.0,
+              "kind": "MEASURED"
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "grounding_dino",
+            "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+            "backend": "CPU",
+            "device": "cpu",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "prompt": "white mug"
+            },
+            "hashes": {
+              "image_sha256": "1226475e9973b674ad304eaa91e3569cbeb3b284f23f01ada2188bf11d96d1e8",
+              "mask_sha256": null,
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real06_adjacent",
+          "workflow": "text_grounding",
+          "device": "cpu",
+          "model": "Grounding DINO SwinT OGC",
+          "prompt": "red ball",
+          "model_load_ms": null,
+          "grounding_latency_ms": 2802.175,
+          "detection_count": 2,
+          "detections": [
+            {
+              "index": 0,
+              "label": "red ball",
+              "confidence": 0.813507,
+              "box_xyxy": [
+                127.72624969482422,
+                193.3860321044922,
+                241.13626098632812,
+                319.02630615234375
+              ]
+            },
+            {
+              "index": 1,
+              "label": "red ball",
+              "confidence": 0.688529,
+              "box_xyxy": [
+                227.68919372558594,
+                193.29583740234375,
+                352.9815673828125,
+                319.11273193359375
+              ]
+            }
+          ],
+          "selected_box_xyxy": [
+            127.72624969482422,
+            193.3860321044922,
+            241.13626098632812,
+            319.02630615234375
+          ],
+          "selected_confidence": 0.813507,
+          "metrics": [
+            {
+              "name": "detection_count",
+              "value": 2.0,
+              "kind": "MEASURED"
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "grounding_dino",
+            "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+            "backend": "CPU",
+            "device": "cpu",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "prompt": "red ball"
+            },
+            "hashes": {
+              "image_sha256": "608fe7896feb8d1c4a68e86d08835f33b04d182dc0b0e1a9579bf4c088d46d77",
+              "mask_sha256": null,
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real07_cluttered",
+          "workflow": "text_grounding",
+          "device": "cpu",
+          "model": "Grounding DINO SwinT OGC",
+          "prompt": "red book",
+          "model_load_ms": null,
+          "grounding_latency_ms": 3062.087,
+          "detection_count": 1,
+          "detections": [
+            {
+              "index": 0,
+              "label": "red book",
+              "confidence": 0.901718,
+              "box_xyxy": [
+                168.77880859375,
+                238.71591186523438,
+                261.6329345703125,
+                312.0274963378906
+              ]
+            }
+          ],
+          "selected_box_xyxy": [
+            168.77880859375,
+            238.71591186523438,
+            261.6329345703125,
+            312.0274963378906
+          ],
+          "selected_confidence": 0.901718,
+          "metrics": [
+            {
+              "name": "detection_count",
+              "value": 1.0,
+              "kind": "MEASURED"
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "grounding_dino",
+            "model_commit": "126abe633ffe333e16e4a0a4e946bc1003caf757",
+            "backend": "CPU",
+            "device": "cpu",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "prompt": "red book"
+            },
+            "hashes": {
+              "image_sha256": "268cb39f3269a0cf47db1e1da2f6be3e79a85e3582764e6138f50ae742e25e23",
+              "mask_sha256": null,
+              "output_sha256": null
+            }
+          }
+        }
+      ]
+    },
+    "text_grounding_sam2_box": {
+      "status": "MEASURED",
+      "workflow": "text_grounding_sam2_box",
+      "device": "mps",
+      "cases": [
+        {
+          "case_id": "real01_person",
+          "workflow": "text_grounding_sam2_box",
+          "status": "MEASURED",
+          "box_xyxy": [
+            211,
+            203,
+            300,
+            392
+          ],
+          "grounding_confidence": 0.527938,
+          "segmentation_latency_ms": 920.451,
+          "confidence": 0.994086503982544,
+          "mask_area_pixels": 14729,
+          "mask_area_ratio": 0.056187,
+          "mask_sha256": "936eab3afee8a98be5c437540df14ddf1baa4f0c8fc24c014a12790d927b6cfd",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.056186676025390625,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.7647058823529411,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 1.0,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.7647058823529411,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.8666666666666666,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.6532218396458436,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.34677816035415643,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "box_xyxy": [
+                211,
+                203,
+                300,
+                392
+              ]
+            },
+            "hashes": {
+              "image_sha256": "7499b40f1978d48ac466f5190e58511168156333b19cd234d0e43d74e662a895",
+              "mask_sha256": "936eab3afee8a98be5c437540df14ddf1baa4f0c8fc24c014a12790d927b6cfd",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real02_vehicle",
+          "workflow": "text_grounding_sam2_box",
+          "status": "MEASURED",
+          "box_xyxy": [
+            148,
+            298,
+            361,
+            396
+          ],
+          "grounding_confidence": 0.939219,
+          "segmentation_latency_ms": 216.749,
+          "confidence": 0.9536369442939758,
+          "mask_area_pixels": 10948,
+          "mask_area_ratio": 0.041763,
+          "mask_sha256": "4df189ecb359d404aaa04ef1cfd1079cba195499395f878bb15d37f8c021c8b5",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.0417633056640625,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.7337719003826274,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9984472049689441,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.7346102150537634,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.8464457178256156,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.6021717670286278,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.39782823297137215,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "box_xyxy": [
+                148,
+                298,
+                361,
+                396
+              ]
+            },
+            "hashes": {
+              "image_sha256": "9dd8802fb94aae616c1f937b7909c90f0be0a2f9513e5e1f1b1ef788e526fbe9",
+              "mask_sha256": "4df189ecb359d404aaa04ef1cfd1079cba195499395f878bb15d37f8c021c8b5",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real03_furniture",
+          "workflow": "text_grounding_sam2_box",
+          "status": "MEASURED",
+          "box_xyxy": [
+            198,
+            148,
+            311,
+            380
+          ],
+          "grounding_confidence": 0.946392,
+          "segmentation_latency_ms": 173.863,
+          "confidence": 0.9816634654998779,
+          "mask_area_pixels": 9723,
+          "mask_area_ratio": 0.03709,
+          "mask_sha256": "73ee8178b6e4ded84c486eeae8638a1d1888e7b5ea94ae6ed4a4a7c7ba73d2b1",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.037090301513671875,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9983564458140729,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9995886043402242,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.998766827664166,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.9991775470340291,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.981651376146789,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.01834862385321101,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "box_xyxy": [
+                198,
+                148,
+                311,
+                380
+              ]
+            },
+            "hashes": {
+              "image_sha256": "96b7ccc02787be131ae887e64e71b4a223961057e3b86260d5980afa03946cbc",
+              "mask_sha256": "73ee8178b6e4ded84c486eeae8638a1d1888e7b5ea94ae6ed4a4a7c7ba73d2b1",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real04_outdoor",
+          "workflow": "text_grounding_sam2_box",
+          "status": "MEASURED",
+          "box_xyxy": [
+            244,
+            103,
+            416,
+            391
+          ],
+          "grounding_confidence": 0.63793,
+          "segmentation_latency_ms": 179.316,
+          "confidence": 0.9890766143798828,
+          "mask_area_pixels": 27760,
+          "mask_area_ratio": 0.105896,
+          "mask_sha256": "94359829ae1fda01957fc64665f8537a12a2273b5997e378d09f143db408767b",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.10589599609375,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9922749544007725,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9994596541786743,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.9928075574321906,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.9961225002692708,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.7787821122740247,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.22121788772597525,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "box_xyxy": [
+                244,
+                103,
+                416,
+                391
+              ]
+            },
+            "hashes": {
+              "image_sha256": "ad18b7fecbffecc47225b8c185bd93b8d0323de0389f47f56b70d29b3bc8742a",
+              "mask_sha256": "94359829ae1fda01957fc64665f8537a12a2273b5997e378d09f143db408767b",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real05_textured",
+          "workflow": "text_grounding_sam2_box",
+          "status": "MEASURED",
+          "box_xyxy": [
+            207,
+            260,
+            321,
+            359
+          ],
+          "grounding_confidence": 0.870556,
+          "segmentation_latency_ms": 191.513,
+          "confidence": 0.9870942234992981,
+          "mask_area_pixels": 7805,
+          "mask_area_ratio": 0.029774,
+          "mask_sha256": "7d51a06d39af0845a1087d466c2dbfd06788b50647800ea1666c62f1cdcbe9df",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.029773712158203125,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.991801178580579,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 0.9919282511210762,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.9998708510913082,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.99588371494726,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.8598442714126807,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.14015572858731926,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "box_xyxy": [
+                207,
+                260,
+                321,
+                359
+              ]
+            },
+            "hashes": {
+              "image_sha256": "1226475e9973b674ad304eaa91e3569cbeb3b284f23f01ada2188bf11d96d1e8",
+              "mask_sha256": "7d51a06d39af0845a1087d466c2dbfd06788b50647800ea1666c62f1cdcbe9df",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real06_adjacent",
+          "workflow": "text_grounding_sam2_box",
+          "status": "MEASURED",
+          "box_xyxy": [
+            127,
+            193,
+            241,
+            319
+          ],
+          "grounding_confidence": 0.813507,
+          "segmentation_latency_ms": 292.16,
+          "confidence": 0.9913471341133118,
+          "mask_area_pixels": 10827,
+          "mask_area_ratio": 0.041302,
+          "mask_sha256": "e090cd8a43348b6693be8bfda7b24254ccf8bdad446796bfe2954e67a711dcf1",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.041301727294921875,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.8976867589752093,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 1.0,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.8976867589752093,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.9460852848654316,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.6430948419301165,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.35690515806988354,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "box_xyxy": [
+                127,
+                193,
+                241,
+                319
+              ]
+            },
+            "hashes": {
+              "image_sha256": "608fe7896feb8d1c4a68e86d08835f33b04d182dc0b0e1a9579bf4c088d46d77",
+              "mask_sha256": "e090cd8a43348b6693be8bfda7b24254ccf8bdad446796bfe2954e67a711dcf1",
+              "output_sha256": null
+            }
+          }
+        },
+        {
+          "case_id": "real07_cluttered",
+          "workflow": "text_grounding_sam2_box",
+          "status": "MEASURED",
+          "box_xyxy": [
+            168,
+            238,
+            261,
+            312
+          ],
+          "grounding_confidence": 0.901718,
+          "segmentation_latency_ms": 289.992,
+          "confidence": 0.9917553663253784,
+          "mask_area_pixels": 6456,
+          "mask_area_ratio": 0.024628,
+          "mask_sha256": "10580fcc73833bfb09bff046f249d5e8eba8f1f4613cbfc7348627a0db882d8e",
+          "metrics": [
+            {
+              "name": "mask_area_ratio",
+              "value": 0.024627685546875,
+              "kind": "COMPUTED",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9992261259866894,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "precision",
+              "value": 1.0,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "recall",
+              "value": 0.9992261259866894,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "f1",
+              "value": 0.9996129132151429,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "iou",
+              "value": 0.9846860643185299,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            },
+            {
+              "name": "boundary_difference_ratio",
+              "value": 0.015313935681470138,
+              "kind": "REFERENCE_DEPENDENT",
+              "unit": "ratio",
+              "note": null
+            }
+          ],
+          "reproducibility": {
+            "python_version": "3.11.15",
+            "platform": "macOS-15.7.9-arm64-arm-64bit",
+            "architecture": "arm64",
+            "model": "sam2",
+            "model_commit": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+            "backend": "LOCAL_MPS",
+            "device": "mps",
+            "environment": "base",
+            "seed": null,
+            "parameters": {
+              "box_xyxy": [
+                168,
+                238,
+                261,
+                312
+              ]
+            },
+            "hashes": {
+              "image_sha256": "268cb39f3269a0cf47db1e1da2f6be3e79a85e3582764e6138f50ae742e25e23",
+              "mask_sha256": "10580fcc73833bfb09bff046f249d5e8eba8f1f4613cbfc7348627a0db882d8e",
+              "output_sha256": null
+            }
+          }
+        }
+      ],
+      "qualitative": [
+        {
+          "case_id": "real01_person",
+          "category": "person",
+          "workflow": "text_grounding_sam2_box",
+          "target_object": "person",
+          "mask_area_ratio": 0.056187,
+          "reference_iou": 0.7647058823529411,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.765 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real02_vehicle",
+          "category": "vehicle",
+          "workflow": "text_grounding_sam2_box",
+          "target_object": "car",
+          "mask_area_ratio": 0.041763,
+          "reference_iou": 0.7337719003826274,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.734 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real03_furniture",
+          "category": "furniture",
+          "workflow": "text_grounding_sam2_box",
+          "target_object": "chair",
+          "mask_area_ratio": 0.03709,
+          "reference_iou": 0.9983564458140729,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.998 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real04_outdoor",
+          "category": "outdoor_scene",
+          "workflow": "text_grounding_sam2_box",
+          "target_object": "tree",
+          "mask_area_ratio": 0.105896,
+          "reference_iou": 0.9922749544007725,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.992 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real05_textured",
+          "category": "textured_background",
+          "workflow": "text_grounding_sam2_box",
+          "target_object": "mug",
+          "mask_area_ratio": 0.029774,
+          "reference_iou": 0.991801178580579,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.992 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real06_adjacent",
+          "category": "adjacent_objects",
+          "workflow": "text_grounding_sam2_box",
+          "target_object": "red ball",
+          "mask_area_ratio": 0.041302,
+          "reference_iou": 0.8976867589752093,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.898 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        },
+        {
+          "case_id": "real07_cluttered",
+          "category": "cluttered_scene",
+          "workflow": "text_grounding_sam2_box",
+          "target_object": "book",
+          "mask_area_ratio": 0.024628,
+          "reference_iou": 0.9992261259866894,
+          "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+          "boundary_quality": "Reference IoU 0.999 (pixel-level, constructed GT)",
+          "structure_preservation": "Subjective \u2014 not scored numerically",
+          "semantic_plausibility": "Subjective \u2014 not scored numerically"
+        }
+      ],
+      "peak_rss_mib": 795.5,
+      "mps_driver_mib": 5.7
+    }
+  },
+  "inpainting": {
+    "status": "MEASURED",
+    "device": "mps",
+    "model": "Moebius",
+    "model_load_ms": 7214.266,
+    "peak_rss_mib": 1542.62,
+    "mps_driver_mib": 191.7,
+    "cases": [
+      {
+        "case_id": "real01_person",
+        "status": "MEASURED",
+        "mask_source": "sam2_point",
+        "model_load_ms": 7214.266,
+        "cold_inference_ms": 31332.112,
+        "warm_inference_ms": {
+          "best": 30786.428,
+          "mean": 30786.428,
+          "samples": 1
+        },
+        "output_resolution": [
+          512,
+          512,
+          3
+        ],
+        "adapter_latency_ms": 30784.813,
+        "memory_mb": 4516.22,
+        "output_sha256": "fba6fd0810c56b3a7e846f857e55a115b625f30ab0c12382f69f60a02daa33b9",
+        "metrics": [
+          {
+            "name": "outside_mask_preservation",
+            "value": 0.9999590845634141,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "moebius",
+          "model_commit": "b88d462bacb9af6e7128a3b4cc4a07418bedfd61",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "num_steps": 20,
+            "mask_source": "sam2_point"
+          },
+          "hashes": {
+            "image_sha256": "7499b40f1978d48ac466f5190e58511168156333b19cd234d0e43d74e662a895",
+            "mask_sha256": "7a476d666986f4db0d3ea50132ba70cee2a8f842710a5abab69f57542675122e",
+            "output_sha256": "fba6fd0810c56b3a7e846f857e55a115b625f30ab0c12382f69f60a02daa33b9"
+          }
+        }
+      },
+      {
+        "case_id": "real02_vehicle",
+        "status": "MEASURED",
+        "mask_source": "sam2_point",
+        "model_load_ms": null,
+        "cold_inference_ms": 31011.825,
+        "warm_inference_ms": {
+          "best": 31298.694,
+          "mean": 31298.694,
+          "samples": 1
+        },
+        "output_resolution": [
+          512,
+          512,
+          3
+        ],
+        "adapter_latency_ms": 31297.197,
+        "memory_mb": 4504.22,
+        "output_sha256": "e48386975c1fe5762b3e155aa1e2882306c0c1cf175fb251f2c40dd89955de49",
+        "metrics": [
+          {
+            "name": "outside_mask_preservation",
+            "value": 0.9999703921287444,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "moebius",
+          "model_commit": "b88d462bacb9af6e7128a3b4cc4a07418bedfd61",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "num_steps": 20,
+            "mask_source": "sam2_point"
+          },
+          "hashes": {
+            "image_sha256": "9dd8802fb94aae616c1f937b7909c90f0be0a2f9513e5e1f1b1ef788e526fbe9",
+            "mask_sha256": "53489ea2b6a742e0053b6aa1d57efd80525ace04dbe5d46e886a9d583a41470e",
+            "output_sha256": "e48386975c1fe5762b3e155aa1e2882306c0c1cf175fb251f2c40dd89955de49"
+          }
+        }
+      },
+      {
+        "case_id": "real06_adjacent",
+        "status": "MEASURED",
+        "mask_source": "sam2_point",
+        "model_load_ms": null,
+        "cold_inference_ms": 30351.177,
+        "warm_inference_ms": {
+          "best": 35039.737,
+          "mean": 35039.737,
+          "samples": 1
+        },
+        "output_resolution": [
+          512,
+          512,
+          3
+        ],
+        "adapter_latency_ms": 35036.548,
+        "memory_mb": 4504.22,
+        "output_sha256": "50b1dbbb5677d73fc05e28190299f90b6bb3ed5e16a6a4686dd4509d5cb607b1",
+        "metrics": [
+          {
+            "name": "outside_mask_preservation",
+            "value": 0.999974280600058,
+            "kind": "COMPUTED",
+            "unit": "ratio",
+            "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+          }
+        ],
+        "reproducibility": {
+          "python_version": "3.11.15",
+          "platform": "macOS-15.7.9-arm64-arm-64bit",
+          "architecture": "arm64",
+          "model": "moebius",
+          "model_commit": "b88d462bacb9af6e7128a3b4cc4a07418bedfd61",
+          "backend": "LOCAL_MPS",
+          "device": "mps",
+          "environment": "base",
+          "seed": null,
+          "parameters": {
+            "num_steps": 20,
+            "mask_source": "sam2_point"
+          },
+          "hashes": {
+            "image_sha256": "608fe7896feb8d1c4a68e86d08835f33b04d182dc0b0e1a9579bf4c088d46d77",
+            "mask_sha256": "700bd236fd239bda01fa8f78134e4a0dbe5a077dda510661a56857b4eefc4f1f",
+            "output_sha256": "50b1dbbb5677d73fc05e28190299f90b6bb3ed5e16a6a4686dd4509d5cb607b1"
+          }
+        }
+      }
+    ],
+    "preservation": [
+      {
+        "case_id": "real01_person",
+        "metric": {
+          "name": "outside_mask_preservation",
+          "value": 0.9999590845634141,
+          "kind": "COMPUTED",
+          "unit": "ratio",
+          "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+        },
+        "note": "pixel-level preservation metric; not a human-quality score"
+      },
+      {
+        "case_id": "real02_vehicle",
+        "metric": {
+          "name": "outside_mask_preservation",
+          "value": 0.9999703921287444,
+          "kind": "COMPUTED",
+          "unit": "ratio",
+          "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+        },
+        "note": "pixel-level preservation metric; not a human-quality score"
+      },
+      {
+        "case_id": "real06_adjacent",
+        "metric": {
+          "name": "outside_mask_preservation",
+          "value": 0.999974280600058,
+          "kind": "COMPUTED",
+          "unit": "ratio",
+          "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+        },
+        "note": "pixel-level preservation metric; not a human-quality score"
+      }
+    ],
+    "qualitative": [
+      {
+        "case_id": "real01_person",
+        "workflow": "moebius_inpaint",
+        "input_sha256": "7499b40f1978d48ac466f5190e58511168156333b19cd234d0e43d74e662a895",
+        "mask_sha256": "7a476d666986f4db0d3ea50132ba70cee2a8f842710a5abab69f57542675122e",
+        "result_sha256": "fba6fd0810c56b3a7e846f857e55a115b625f30ab0c12382f69f60a02daa33b9",
+        "obvious_artifacts": "Inspect output PNG in outputs/real_image_eval/",
+        "boundary_quality": "Subjective \u2014 not scored numerically",
+        "structure_preservation": "outside_mask_preservation=0.9999590845634141",
+        "semantic_plausibility": "Subjective \u2014 not scored numerically"
+      },
+      {
+        "case_id": "real02_vehicle",
+        "workflow": "moebius_inpaint",
+        "input_sha256": "9dd8802fb94aae616c1f937b7909c90f0be0a2f9513e5e1f1b1ef788e526fbe9",
+        "mask_sha256": "53489ea2b6a742e0053b6aa1d57efd80525ace04dbe5d46e886a9d583a41470e",
+        "result_sha256": "e48386975c1fe5762b3e155aa1e2882306c0c1cf175fb251f2c40dd89955de49",
+        "obvious_artifacts": "Inspect output PNG in outputs/real_image_eval/",
+        "boundary_quality": "Subjective \u2014 not scored numerically",
+        "structure_preservation": "outside_mask_preservation=0.9999703921287444",
+        "semantic_plausibility": "Subjective \u2014 not scored numerically"
+      },
+      {
+        "case_id": "real06_adjacent",
+        "workflow": "moebius_inpaint",
+        "input_sha256": "608fe7896feb8d1c4a68e86d08835f33b04d182dc0b0e1a9579bf4c088d46d77",
+        "mask_sha256": "700bd236fd239bda01fa8f78134e4a0dbe5a077dda510661a56857b4eefc4f1f",
+        "result_sha256": "50b1dbbb5677d73fc05e28190299f90b6bb3ed5e16a6a4686dd4509d5cb607b1",
+        "obvious_artifacts": "Inspect output PNG in outputs/real_image_eval/",
+        "boundary_quality": "Subjective \u2014 not scored numerically",
+        "structure_preservation": "outside_mask_preservation=0.999974280600058",
+        "semantic_plausibility": "Subjective \u2014 not scored numerically"
+      }
+    ]
+  },
+  "preservation": {
+    "cases": [
+      {
+        "case_id": "real01_person",
+        "metric": {
+          "name": "outside_mask_preservation",
+          "value": 0.9999590845634141,
+          "kind": "COMPUTED",
+          "unit": "ratio",
+          "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+        },
+        "note": "pixel-level preservation metric; not a human-quality score"
+      },
+      {
+        "case_id": "real02_vehicle",
+        "metric": {
+          "name": "outside_mask_preservation",
+          "value": 0.9999703921287444,
+          "kind": "COMPUTED",
+          "unit": "ratio",
+          "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+        },
+        "note": "pixel-level preservation metric; not a human-quality score"
+      },
+      {
+        "case_id": "real06_adjacent",
+        "metric": {
+          "name": "outside_mask_preservation",
+          "value": 0.999974280600058,
+          "kind": "COMPUTED",
+          "unit": "ratio",
+          "note": "1 - normalized outside-mask MAE; not a perceptual metric"
+        },
+        "note": "pixel-level preservation metric; not a human-quality score"
+      }
+    ]
+  },
+  "end_to_end": {
+    "status": "MEASURED",
+    "text_to_moebius": {
+      "status": "MEASURED",
+      "case_id": "real03_furniture",
+      "prompt": "wooden chair",
+      "total_latency_ms": 55720.613,
+      "stages": [
+        {
+          "stage": "grounding_dino",
+          "latency_ms": 10069.778,
+          "device": "cpu"
+        },
+        {
+          "stage": "sam2_box",
+          "latency_ms": 1089.251,
+          "device": "mps"
+        },
+        {
+          "stage": "moebius",
+          "latency_ms": 41476.501,
+          "device": "mps"
+        }
+      ],
+      "output_resolution": [
+        512,
+        512,
+        3
+      ],
+      "output_sha256": "71c5b970f500fbf7565fd4437a4f3f5bb7d923a3b084f4ba27d3813b461c247d",
+      "mask_sha256": "73ee8178b6e4ded84c486eeae8638a1d1888e7b5ea94ae6ed4a4a7c7ba73d2b1",
+      "image_sha256": "96b7ccc02787be131ae887e64e71b4a223961057e3b86260d5980afa03946cbc"
+    },
+    "click_to_moebius": {
+      "status": "MEASURED",
+      "case_id": "real06_adjacent",
+      "point_xy": [
+        190,
+        256
+      ],
+      "total_latency_ms": 31684.245,
+      "stages": [
+        {
+          "stage": "sam2_point",
+          "latency_ms": 565.66,
+          "device": "mps"
+        },
+        {
+          "stage": "moebius",
+          "latency_ms": 30345.07,
+          "device": "mps"
+        }
+      ],
+      "output_resolution": [
+        512,
+        512,
+        3
+      ],
+      "output_sha256": "50b1dbbb5677d73fc05e28190299f90b6bb3ed5e16a6a4686dd4509d5cb607b1",
+      "mask_sha256": "700bd236fd239bda01fa8f78134e4a0dbe5a077dda510661a56857b4eefc4f1f",
+      "image_sha256": "608fe7896feb8d1c4a68e86d08835f33b04d182dc0b0e1a9579bf4c088d46d77"
+    }
+  },
+  "qualitative_observations": [
+    {
+      "case_id": "real01_person",
+      "category": "person",
+      "workflow": "click_sam2",
+      "target_object": "person",
+      "mask_area_ratio": 0.030857,
+      "reference_iou": 0.41996781060173405,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.420 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real02_vehicle",
+      "category": "vehicle",
+      "workflow": "click_sam2",
+      "target_object": "car",
+      "mask_area_ratio": 0.015759,
+      "reference_iou": 0.2776209677419355,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.278 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real03_furniture",
+      "category": "furniture",
+      "workflow": "click_sam2",
+      "target_object": "chair",
+      "mask_area_ratio": 0.037018,
+      "reference_iou": 0.9964047252182845,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.996 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real04_outdoor",
+      "category": "outdoor_scene",
+      "workflow": "click_sam2",
+      "target_object": "tree",
+      "mask_area_ratio": 0.085899,
+      "reference_iou": 0.805509838998211,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.806 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real05_textured",
+      "category": "textured_background",
+      "workflow": "click_sam2",
+      "target_object": "mug",
+      "mask_area_ratio": 0.029766,
+      "reference_iou": 0.9918001281229981,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.992 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real06_adjacent",
+      "category": "adjacent_objects",
+      "workflow": "click_sam2",
+      "target_object": "red ball",
+      "mask_area_ratio": 0.041447,
+      "reference_iou": 0.9003647214854111,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.900 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real07_cluttered",
+      "category": "cluttered_scene",
+      "workflow": "click_sam2",
+      "target_object": "book",
+      "mask_area_ratio": 0.024643,
+      "reference_iou": 0.9989170792079208,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.999 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real01_person",
+      "category": "person",
+      "workflow": "text_grounding_sam2_box",
+      "target_object": "person",
+      "mask_area_ratio": 0.056187,
+      "reference_iou": 0.7647058823529411,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.765 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real02_vehicle",
+      "category": "vehicle",
+      "workflow": "text_grounding_sam2_box",
+      "target_object": "car",
+      "mask_area_ratio": 0.041763,
+      "reference_iou": 0.7337719003826274,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.734 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real03_furniture",
+      "category": "furniture",
+      "workflow": "text_grounding_sam2_box",
+      "target_object": "chair",
+      "mask_area_ratio": 0.03709,
+      "reference_iou": 0.9983564458140729,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.998 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real04_outdoor",
+      "category": "outdoor_scene",
+      "workflow": "text_grounding_sam2_box",
+      "target_object": "tree",
+      "mask_area_ratio": 0.105896,
+      "reference_iou": 0.9922749544007725,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.992 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real05_textured",
+      "category": "textured_background",
+      "workflow": "text_grounding_sam2_box",
+      "target_object": "mug",
+      "mask_area_ratio": 0.029774,
+      "reference_iou": 0.991801178580579,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.992 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real06_adjacent",
+      "category": "adjacent_objects",
+      "workflow": "text_grounding_sam2_box",
+      "target_object": "red ball",
+      "mask_area_ratio": 0.041302,
+      "reference_iou": 0.8976867589752093,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.898 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real07_cluttered",
+      "category": "cluttered_scene",
+      "workflow": "text_grounding_sam2_box",
+      "target_object": "book",
+      "mask_area_ratio": 0.024628,
+      "reference_iou": 0.9992261259866894,
+      "obvious_artifacts": "Not assessed visually in harness \u2014 see saved PNG artifacts.",
+      "boundary_quality": "Reference IoU 0.999 (pixel-level, constructed GT)",
+      "structure_preservation": "Subjective \u2014 not scored numerically",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real01_person",
+      "workflow": "moebius_inpaint",
+      "input_sha256": "7499b40f1978d48ac466f5190e58511168156333b19cd234d0e43d74e662a895",
+      "mask_sha256": "7a476d666986f4db0d3ea50132ba70cee2a8f842710a5abab69f57542675122e",
+      "result_sha256": "fba6fd0810c56b3a7e846f857e55a115b625f30ab0c12382f69f60a02daa33b9",
+      "obvious_artifacts": "Inspect output PNG in outputs/real_image_eval/",
+      "boundary_quality": "Subjective \u2014 not scored numerically",
+      "structure_preservation": "outside_mask_preservation=0.9999590845634141",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real02_vehicle",
+      "workflow": "moebius_inpaint",
+      "input_sha256": "9dd8802fb94aae616c1f937b7909c90f0be0a2f9513e5e1f1b1ef788e526fbe9",
+      "mask_sha256": "53489ea2b6a742e0053b6aa1d57efd80525ace04dbe5d46e886a9d583a41470e",
+      "result_sha256": "e48386975c1fe5762b3e155aa1e2882306c0c1cf175fb251f2c40dd89955de49",
+      "obvious_artifacts": "Inspect output PNG in outputs/real_image_eval/",
+      "boundary_quality": "Subjective \u2014 not scored numerically",
+      "structure_preservation": "outside_mask_preservation=0.9999703921287444",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    },
+    {
+      "case_id": "real06_adjacent",
+      "workflow": "moebius_inpaint",
+      "input_sha256": "608fe7896feb8d1c4a68e86d08835f33b04d182dc0b0e1a9579bf4c088d46d77",
+      "mask_sha256": "700bd236fd239bda01fa8f78134e4a0dbe5a077dda510661a56857b4eefc4f1f",
+      "result_sha256": "50b1dbbb5677d73fc05e28190299f90b6bb3ed5e16a6a4686dd4509d5cb607b1",
+      "obvious_artifacts": "Inspect output PNG in outputs/real_image_eval/",
+      "boundary_quality": "Subjective \u2014 not scored numerically",
+      "structure_preservation": "outside_mask_preservation=0.999974280600058",
+      "semantic_plausibility": "Subjective \u2014 not scored numerically"
+    }
+  ],
+  "limitations": [
+    "Scenes are deterministic synthetic images, not photographs from a public dataset.",
+    "Reference masks are constructed analytically \u2014 metrics measure agreement with designed targets.",
+    "Subjective quality (semantic plausibility, visible artifacts) is recorded but not numerically scored.",
+    "Moebius inpainting runs on a subset (3 cases) to limit inference cost.",
+    "Cross-env subprocess orchestration adds overhead to end-to-end timings.",
+    "Does not supersede or overwrite Phase 16 mvp_benchmark.json.",
+    "Generated PNG artifacts are not committed (outputs/real_image_eval/)."
+  ],
+  "unavailable_metrics": [
+    "lpips",
+    "ssim_vs_reference_edit",
+    "human_preference_score",
+    "grounding_box_iou (no constructed box GT)"
+  ]
+}
