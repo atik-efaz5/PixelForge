@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editByInstruction, inpaint, segment, selectByText } from "@/lib/api";
 import {
+  EditSessionHistory,
+  type EditSessionSnapshot,
+  type SelectionMetadata,
+} from "@/lib/editSession";
+import {
   MaskEditHistory,
   cloneMask,
   createEmptyMask,
@@ -23,6 +28,7 @@ import type {
 } from "@/types/api";
 import { ControlPanel } from "@/components/ControlPanel";
 import { EditorCanvas } from "@/components/EditorCanvas";
+import { HistoryPanel } from "@/components/HistoryPanel";
 import { ResultPanel } from "@/components/ResultPanel";
 
 function revokeIfObjectUrl(url: string | null) {
@@ -48,6 +54,11 @@ export function ImageEditor() {
   const [hasAiMask, setHasAiMask] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
+  const [sessionEntries, setSessionEntries] = useState<readonly EditSessionSnapshot[]>([]);
+  const [sessionIndex, setSessionIndex] = useState(-1);
+  const [canSessionUndo, setCanSessionUndo] = useState(false);
+  const [canSessionRedo, setCanSessionRedo] = useState(false);
+  const [hasPendingResult, setHasPendingResult] = useState(false);
   const [backend] = useState<InpaintBackend>("moebius");
   const [textPrompt, setTextPrompt] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
@@ -59,14 +70,26 @@ export function ImageEditor() {
   const maskRef = useRef<Uint8Array | null>(null);
   const aiMaskRef = useRef<Uint8Array | null>(null);
   const maskHistoryRef = useRef(new MaskEditHistory());
+  const sessionHistoryRef = useRef(new EditSessionHistory());
   const strokeSnapshotRef = useRef<Uint8Array | null>(null);
+  const lastSelectionMetaRef = useRef<SelectionMetadata | undefined>(undefined);
 
   const busy = status !== "idle";
 
-  const syncHistoryFlags = useCallback(() => {
+  const syncMaskHistoryFlags = useCallback(() => {
     const history = maskHistoryRef.current;
     setCanUndo(history.canUndo());
     setCanRedo(history.canRedo());
+  }, []);
+
+  const syncSessionUi = useCallback(() => {
+    const session = sessionHistoryRef.current;
+    setSessionEntries(session.snapshotEntries);
+    setSessionIndex(session.currentIndex);
+    setCanSessionUndo(session.canUndo());
+    setCanSessionRedo(session.canRedo());
+    const current = session.current();
+    setHasPendingResult(current?.operation === "INPAINT");
   }, []);
 
   const updateMaskPreview = useCallback(
@@ -85,14 +108,55 @@ export function ImageEditor() {
   );
 
   const applyMask = useCallback(
-    (nextMask: Uint8Array) => {
+    (nextMask: Uint8Array | null) => {
       if (!imageSize) return;
       maskRef.current = nextMask;
       setMask(nextMask);
-      updateMaskPreview(nextMask, imageSize);
-      syncHistoryFlags();
+      if (nextMask) {
+        updateMaskPreview(nextMask, imageSize);
+      } else {
+        setMaskPreview(null);
+      }
+      syncMaskHistoryFlags();
     },
-    [imageSize, syncHistoryFlags, updateMaskPreview]
+    [imageSize, syncMaskHistoryFlags, updateMaskPreview]
+  );
+
+  const applySnapshot = useCallback(
+    (snapshot: EditSessionSnapshot) => {
+      if (imageSize) {
+        if (snapshot.mask) {
+          applyMask(cloneMask(snapshot.mask));
+        } else {
+          applyMask(null);
+        }
+      }
+      aiMaskRef.current = snapshot.aiMask ? cloneMask(snapshot.aiMask) : null;
+      setHasAiMask(Boolean(snapshot.aiMask));
+      setResultUrl(snapshot.resultUrl);
+      setLatencyMs(snapshot.inpaint?.latencyMs ?? null);
+      if (snapshot.selection?.prompt) {
+        setTextPrompt(snapshot.selection.prompt);
+      }
+      syncSessionUi();
+    },
+    [applyMask, imageSize, syncSessionUi]
+  );
+
+  const recordSession = useCallback(
+    (
+      input: Parameters<EditSessionHistory["append"]>[0],
+      options?: { apply?: boolean }
+    ) => {
+      const entry = sessionHistoryRef.current.append(input);
+      if (options?.apply !== false) {
+        applySnapshot(entry);
+      } else {
+        syncSessionUi();
+      }
+      return entry;
+    },
+    [applySnapshot, syncSessionUi]
   );
 
   const commitMaskEdit = useCallback(
@@ -110,7 +174,7 @@ export function ImageEditor() {
   const resetSession = useCallback(
     (file: File, url: string, size: ImageDimensions) => {
       revokeIfObjectUrl(imageUrl);
-      revokeIfObjectUrl(resultUrl);
+      sessionHistoryRef.current.dispose();
       setImageFile(file);
       setImageUrl(url);
       setImageSize(size);
@@ -118,12 +182,14 @@ export function ImageEditor() {
       maskRef.current = null;
       aiMaskRef.current = null;
       maskHistoryRef.current.clear();
+      lastSelectionMetaRef.current = undefined;
       setHasAiMask(false);
       setCanUndo(false);
       setCanRedo(false);
       setMaskPreview(null);
       setResultUrl(null);
       setLatencyMs(null);
+      setHasPendingResult(false);
       setError(null);
       setTool("select");
       setTextPrompt("");
@@ -133,8 +199,10 @@ export function ImageEditor() {
       setShowMaskOverlay(true);
       setShowMaskOnly(false);
       setFeatherRadius(0);
+      const entry = sessionHistoryRef.current.reset(url);
+      applySnapshot(entry);
     },
-    [imageUrl, resultUrl]
+    [applySnapshot, imageUrl]
   );
 
   const handleUpload = useCallback(
@@ -154,16 +222,27 @@ export function ImageEditor() {
   );
 
   const applyMaskFromBlob = useCallback(
-    async (blob: Blob) => {
+    async (
+      blob: Blob,
+      selection: SelectionMetadata
+    ) => {
       if (!imageSize) return;
       const decoded = await decodeMaskPng(blob, imageSize);
       aiMaskRef.current = cloneMask(decoded);
       maskHistoryRef.current.clear();
+      lastSelectionMetaRef.current = selection;
       setHasAiMask(true);
       applyMask(decoded);
+      recordSession({
+        operation: "SELECT",
+        label: "Object selected",
+        mask: decoded,
+        aiMask: decoded,
+        selection,
+      });
       setTool("brush");
     },
-    [applyMask, imageSize]
+    [applyMask, imageSize, recordSession]
   );
 
   const handleFindObject = useCallback(async () => {
@@ -183,7 +262,12 @@ export function ImageEditor() {
       );
       setDetections(metadata.detections || []);
       setDetectionIndex(metadata.detection_index ?? 0);
-      await applyMaskFromBlob(blob);
+      await applyMaskFromBlob(blob, {
+        method: "text",
+        prompt,
+        label: metadata.selected_label,
+        detectionIndex: metadata.detection_index,
+      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Text selection failed.";
@@ -213,7 +297,12 @@ export function ImageEditor() {
           index
         );
         setDetections(metadata.detections || []);
-        await applyMaskFromBlob(blob);
+        await applyMaskFromBlob(blob, {
+          method: "text",
+          prompt: textPrompt.trim(),
+          label: metadata.selected_label,
+          detectionIndex: index,
+        });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Could not switch detection.";
@@ -232,7 +321,7 @@ export function ImageEditor() {
       setError(null);
       try {
         const { blob } = await segment(imageFile, x, y);
-        await applyMaskFromBlob(blob);
+        await applyMaskFromBlob(blob, { method: "point" });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Segmentation failed.";
@@ -242,6 +331,21 @@ export function ImageEditor() {
       }
     },
     [applyMaskFromBlob, busy, imageFile, imageSize]
+  );
+
+  const recordMaskRefined = useCallback(
+    (label = "Mask refined") => {
+      if (!maskRef.current) return;
+      recordSession({
+        operation: "MASK_EDIT",
+        label,
+        mask: maskRef.current,
+        aiMask: aiMaskRef.current,
+        resultUrl,
+        selection: lastSelectionMetaRef.current,
+      });
+    },
+    [recordSession, resultUrl]
   );
 
   const handleStrokeStart = useCallback(() => {
@@ -254,9 +358,10 @@ export function ImageEditor() {
     if (strokeSnapshotRef.current && maskRef.current) {
       maskHistoryRef.current.push(strokeSnapshotRef.current);
       strokeSnapshotRef.current = null;
-      syncHistoryFlags();
+      syncMaskHistoryFlags();
+      recordMaskRefined();
     }
-  }, [syncHistoryFlags]);
+  }, [recordMaskRefined, syncMaskHistoryFlags]);
 
   const handleBrushStroke = useCallback(
     (x: number, y: number, mode: "brush" | "erase") => {
@@ -280,7 +385,8 @@ export function ImageEditor() {
       morphAmount
     );
     commitMaskEdit(next, { recordHistory: true });
-  }, [commitMaskEdit, imageSize, morphAmount]);
+    recordMaskRefined("Mask expanded");
+  }, [commitMaskEdit, imageSize, morphAmount, recordMaskRefined]);
 
   const handleShrinkMask = useCallback(() => {
     if (!imageSize || !maskRef.current) return;
@@ -291,7 +397,8 @@ export function ImageEditor() {
       morphAmount
     );
     commitMaskEdit(next, { recordHistory: true });
-  }, [commitMaskEdit, imageSize, morphAmount]);
+    recordMaskRefined("Mask shrunk");
+  }, [commitMaskEdit, imageSize, morphAmount, recordMaskRefined]);
 
   const handleUndo = useCallback(() => {
     if (!maskRef.current) return;
@@ -308,13 +415,29 @@ export function ImageEditor() {
   const handleResetToAiMask = useCallback(() => {
     if (!aiMaskRef.current) return;
     commitMaskEdit(cloneMask(aiMaskRef.current), { recordHistory: true });
-  }, [commitMaskEdit]);
+    recordSession({
+      operation: "MASK_RESET",
+      label: "Reset to AI mask",
+      mask: aiMaskRef.current,
+      aiMask: aiMaskRef.current,
+      resultUrl,
+      selection: lastSelectionMetaRef.current,
+    });
+  }, [commitMaskEdit, recordSession, resultUrl]);
 
   const handleClearMask = useCallback(() => {
     if (!imageSize) return;
     const cleared = createEmptyMask(imageSize.width, imageSize.height);
     commitMaskEdit(cleared, { recordHistory: true });
-  }, [commitMaskEdit, imageSize]);
+    recordSession({
+      operation: "MASK_EDIT",
+      label: "Mask cleared",
+      mask: cleared,
+      aiMask: aiMaskRef.current,
+      resultUrl,
+      selection: lastSelectionMetaRef.current,
+    });
+  }, [commitMaskEdit, imageSize, recordSession, resultUrl]);
 
   const handleGenerate = useCallback(async () => {
     if (!imageFile || !imageSize || !maskRef.current || busy) return;
@@ -331,10 +454,20 @@ export function ImageEditor() {
         imageSize.height
       );
       const { blob, metadata } = await inpaint(imageFile, maskBlob, backend);
-      revokeIfObjectUrl(resultUrl);
       const url = URL.createObjectURL(blob);
-      setResultUrl(url);
-      setLatencyMs(metadata.latency_ms ?? null);
+      recordSession({
+        operation: "INPAINT",
+        label: "Moebius generated",
+        mask: maskRef.current,
+        aiMask: aiMaskRef.current,
+        resultUrl: url,
+        selection: lastSelectionMetaRef.current,
+        inpaint: {
+          backend,
+          model: metadata.model,
+          latencyMs: metadata.latency_ms ?? undefined,
+        },
+      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Inpainting failed.";
@@ -342,7 +475,68 @@ export function ImageEditor() {
     } finally {
       setStatus("idle");
     }
-  }, [backend, busy, imageFile, imageSize, resultUrl]);
+  }, [backend, busy, imageFile, imageSize, recordSession]);
+
+  const handleUseResult = useCallback(() => {
+    if (!hasPendingResult || !resultUrl) return;
+    recordSession({
+      operation: "RESULT_ACCEPTED",
+      label: "Result accepted",
+      mask: maskRef.current,
+      aiMask: aiMaskRef.current,
+      resultUrl,
+      selection: lastSelectionMetaRef.current,
+      inpaint: sessionHistoryRef.current.current()?.inpaint,
+    });
+    setHasPendingResult(false);
+  }, [hasPendingResult, recordSession, resultUrl]);
+
+  const handleDiscardResult = useCallback(() => {
+    const current = sessionHistoryRef.current.current();
+    if (!current || current.operation !== "INPAINT" || !current.resultUrl) return;
+    sessionHistoryRef.current.releaseResult(current.resultUrl);
+    const previous = sessionHistoryRef.current.previousResultSnapshot();
+    recordSession({
+      operation: "RESULT_REJECTED",
+      label: "Result discarded",
+      mask: maskRef.current,
+      aiMask: aiMaskRef.current,
+      resultUrl: previous?.resultUrl ?? null,
+      selection: lastSelectionMetaRef.current,
+    });
+    setHasPendingResult(false);
+  }, [recordSession]);
+
+  const handleRestorePrevious = useCallback(() => {
+    const previous = sessionHistoryRef.current.previousResultSnapshot();
+    if (!previous) return;
+    const idx = sessionHistoryRef.current.snapshotEntries.findIndex(
+      (e) => e.id === previous.id
+    );
+    if (idx >= 0) {
+      const snap = sessionHistoryRef.current.goTo(idx);
+      if (snap) applySnapshot(snap);
+    }
+    setHasPendingResult(false);
+  }, [applySnapshot]);
+
+  const handleSessionUndo = useCallback(() => {
+    const snap = sessionHistoryRef.current.undo();
+    if (snap) applySnapshot(snap);
+  }, [applySnapshot]);
+
+  const handleSessionRedo = useCallback(() => {
+    const snap = sessionHistoryRef.current.redo();
+    if (snap) applySnapshot(snap);
+  }, [applySnapshot]);
+
+  const handleSelectHistoryEntry = useCallback(
+    (index: number) => {
+      const snap = sessionHistoryRef.current.goTo(index);
+      if (snap) applySnapshot(snap);
+    },
+    [applySnapshot]
+  );
 
   const handleApplyInstruction = useCallback(async () => {
     if (!imageFile || busy) return;
@@ -355,10 +549,19 @@ export function ImageEditor() {
     setError(null);
     try {
       const { blob, metadata } = await editByInstruction(imageFile, instruction);
-      revokeIfObjectUrl(resultUrl);
       const url = URL.createObjectURL(blob);
-      setResultUrl(url);
-      setLatencyMs(metadata.latency_ms ?? null);
+      recordSession({
+        operation: "INPAINT",
+        label: "Instruction edit",
+        mask: maskRef.current,
+        aiMask: aiMaskRef.current,
+        resultUrl: url,
+        inpaint: {
+          backend: "instruct_pix2pix",
+          model: metadata.model,
+          latencyMs: metadata.latency_ms ?? undefined,
+        },
+      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Instruction editing failed.";
@@ -366,7 +569,7 @@ export function ImageEditor() {
     } finally {
       setStatus("idle");
     }
-  }, [busy, editInstruction, imageFile, resultUrl]);
+  }, [busy, editInstruction, imageFile, recordSession]);
 
   useEffect(() => {
     if (mask && imageSize) {
@@ -377,9 +580,9 @@ export function ImageEditor() {
   useEffect(() => {
     return () => {
       revokeIfObjectUrl(imageUrl);
-      revokeIfObjectUrl(resultUrl);
+      sessionHistoryRef.current.dispose();
     };
-  }, [imageUrl, resultUrl]);
+  }, [imageUrl]);
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -462,6 +665,21 @@ export function ImageEditor() {
             onBrushStroke={handleBrushStroke}
             onStrokeStart={handleStrokeStart}
             onStrokeEnd={handleStrokeEnd}
+          />
+
+          <HistoryPanel
+            entries={sessionEntries}
+            currentIndex={sessionIndex}
+            canUndo={canSessionUndo}
+            canRedo={canSessionRedo}
+            busy={busy}
+            hasPendingResult={hasPendingResult}
+            onSelectEntry={handleSelectHistoryEntry}
+            onSessionUndo={handleSessionUndo}
+            onSessionRedo={handleSessionRedo}
+            onUseResult={handleUseResult}
+            onDiscardResult={handleDiscardResult}
+            onRestorePrevious={handleRestorePrevious}
           />
 
           <ResultPanel
