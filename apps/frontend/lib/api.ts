@@ -5,6 +5,7 @@ import type {
   InpaintBackend,
   InpaintMetadata,
   ModelsResponse,
+  RoutingResponse,
   PngWithMetadata,
   RemoveObjectMetadata,
   SelectByTextMetadata,
@@ -106,6 +107,14 @@ export async function models(): Promise<ModelsResponse> {
     throw new Error(await parseErrorMessage(response));
   }
   return (await response.json()) as ModelsResponse;
+}
+
+export async function routing(): Promise<RoutingResponse> {
+  const response = await fetch(`${apiBaseUrl()}/routing`);
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+  return (await response.json()) as RoutingResponse;
 }
 
 export async function segment(

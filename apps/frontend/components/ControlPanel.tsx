@@ -5,6 +5,7 @@ import type { DetectionInfo, EditorTool, InpaintBackend } from "@/types/api";
 interface ControlPanelProps {
   tool: EditorTool;
   backend: InpaintBackend;
+  onBackendChange: (backend: InpaintBackend) => void;
   brushRadius: number;
   eraserRadius: number;
   morphAmount: number;
@@ -46,6 +47,7 @@ interface ControlPanelProps {
 export function ControlPanel({
   tool,
   backend,
+  onBackendChange,
   brushRadius,
   eraserRadius,
   morphAmount,
@@ -306,10 +308,22 @@ export function ControlPanel({
         <h2 style={sectionTitleStyle}>Backend</h2>
         <label style={labelStyle}>
           Inpainting model
-          <select value={backend} disabled style={{ width: "100%", marginTop: 6 }}>
+          <select
+            value={backend}
+            disabled={busy}
+            onChange={(event) =>
+              onBackendChange(event.target.value as InpaintBackend)
+            }
+            style={{ width: "100%", marginTop: 6 }}
+          >
+            <option value="auto">Automatic (router)</option>
             <option value="moebius">Moebius (LOCAL_MPS)</option>
           </select>
         </label>
+        <p style={hintStyle}>
+          Automatic uses capability-aware routing. Manual selection overrides for
+          debugging.
+        </p>
       </section>
 
       <section>

@@ -23,6 +23,7 @@ from apps.backend.validation import (
 from apps.backend.isolated_runner import ground_via_isolated_env, inpaint_via_isolated_env
 from models.errors import ModelLoadError
 from models.registry import get_adapter, known_models
+from models.router import list_routing_catalog
 from models.types import (
     BackendType,
     InpaintParams,
@@ -107,6 +108,10 @@ class ImageEditingService:
                 }
             )
         return rows
+
+    def list_routing(self) -> dict[str, Any]:
+        """Capability-aware routing catalog for ``GET /routing``."""
+        return list_routing_catalog()
 
     def edit_localized(
         self,

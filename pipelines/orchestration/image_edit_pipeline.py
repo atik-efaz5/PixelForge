@@ -23,6 +23,15 @@ from models.adapters.base import (
     SegmentationAdapter,
 )
 from models.errors import ModelInferenceError, ModelLoadError, ModelUnavailableError
+from models.router import (
+    ExecutionPreference,
+    RoutingCapability,
+    RoutingError,
+    RoutingOperation,
+    RoutingRequest,
+    is_automatic_backend,
+    route,
+)
 from models.registry import get_adapter
 from models.types import (
     BackendType,
@@ -89,6 +98,11 @@ class ImageEditPipeline:
         """Point-prompted segmentation via the configured segmentation adapter."""
         image = validate_image(image)
         self._validate_point(image, x, y)
+        routing = self._route_backend(
+            operation=RoutingOperation.SEGMENT_POINT,
+            capability=RoutingCapability.OBJECT_SELECTION_POINT,
+            preferred_backend="sam2",
+        )
         adapter = self._segmentation_provider()
         self._require_segmentation_adapter(adapter)
         if not adapter.is_available():
@@ -96,11 +110,12 @@ class ImageEditPipeline:
                 f"{adapter.model_name} is not available in this environment."
             )
         logger.info(
-            "segment_start model=%s point=(%d,%d) shape=%s",
+            "segment_start model=%s point=(%d,%d) shape=%s route=%s",
             adapter.model_name,
             x,
             y,
             image.shape,
+            routing.model,
         )
         t0 = time.perf_counter()
         try:
@@ -124,6 +139,7 @@ class ImageEditPipeline:
             elapsed_ms,
             int(result.mask.sum()),
         )
+        result.metadata.setdefault("routing", routing.to_dict())
         return result
 
     def select_by_text(
@@ -199,6 +215,12 @@ class ImageEditPipeline:
         """Inpaint ``mask`` (True = generate) using the requested backend."""
         image = validate_image(image)
         mask = require_non_empty_mask(validate_mask(mask, image=image), stage="inpaint")
+        routing = self._route_backend(
+            operation=RoutingOperation.INPAINT,
+            capability=RoutingCapability.LOCALIZED_INPAINT,
+            preferred_backend=backend,
+        )
+        backend = routing.model
         adapter = self._resolve_inpaint_adapter(backend)
         if not adapter.is_available():
             raise ModelUnavailableError(
@@ -226,6 +248,7 @@ class ImageEditPipeline:
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         if result.latency_ms is None or result.latency_ms == 0:
             result.metadata.setdefault("pipeline_latency_ms", round(elapsed_ms, 3))
+        result.metadata.setdefault("routing", routing.to_dict())
         logger.info(
             "inpaint_done model=%s latency_ms=%.3f adapter_ms=%s",
             result.model,
@@ -249,7 +272,7 @@ class ImageEditPipeline:
                 f"Backend '{backend}' does not accept text instructions. "
                 "Use localized inpainting on the selected mask only."
             )
-        if not localized_edit_supported(backend):
+        if not is_automatic_backend(backend) and not localized_edit_supported(backend):
             raise PipelineBackendError(
                 f"Backend '{backend}' does not support localized mask editing."
             )
@@ -277,12 +300,18 @@ class ImageEditPipeline:
             raise UnsupportedEditIntentError(
                 f"Backend '{backend}' does not support mask-conditioned editing."
             )
-        if not global_instruction_edit_supported(backend):
+        if not is_automatic_backend(backend) and not global_instruction_edit_supported(backend):
             raise PipelineBackendError(
                 f"Backend '{backend}' does not support global instruction editing."
             )
         image = validate_image(image)
         prompt = self._validate_text_prompt(instruction)
+        routing = self._route_backend(
+            operation=RoutingOperation.EDIT_BY_INSTRUCTION,
+            capability=RoutingCapability.GLOBAL_INSTRUCTION_EDIT,
+            preferred_backend=backend,
+        )
+        backend = routing.model
         adapter = self._resolve_instruction_edit_adapter(backend)
         if not adapter.is_available():
             raise ModelUnavailableError(
@@ -307,6 +336,7 @@ class ImageEditPipeline:
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         if result.latency_ms is None or result.latency_ms == 0:
             result.metadata.setdefault("pipeline_latency_ms", round(elapsed_ms, 3))
+        result.metadata.setdefault("routing", routing.to_dict())
         logger.info(
             "edit_by_instruction_done model=%s latency_ms=%.3f",
             result.model,
@@ -364,7 +394,12 @@ class ImageEditPipeline:
     def _run_grounding(
         self, image: np.ndarray, prompt: str, grounding_backend: str
     ) -> GroundingResult:
-        key = grounding_backend.strip().lower()
+        routing = self._route_backend(
+            operation=RoutingOperation.SELECT_BY_TEXT,
+            capability=RoutingCapability.OBJECT_SELECTION_TEXT,
+            preferred_backend=grounding_backend,
+        )
+        key = routing.model
         if key not in SUPPORTED_GROUNDING_BACKENDS:
             raise PipelineBackendError(
                 f"Unsupported grounding backend '{grounding_backend}'. "
@@ -394,6 +429,7 @@ class ImageEditPipeline:
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         result.metadata.setdefault("pipeline_latency_ms", round(elapsed_ms, 3))
+        result.metadata.setdefault("routing", routing.to_dict())
         logger.info(
             "ground_done detections=%d latency_ms=%.3f",
             len(result.detections),
@@ -490,6 +526,46 @@ class ImageEditPipeline:
                 "Configured instruction-edit adapter is invalid."
             )
         return adapter
+
+    def _pipeline_availability_probe(self, model_id: str) -> bool:
+        """Probe availability via injected providers (tests) or registry."""
+        key = model_id.strip().lower()
+        try:
+            if key == "sam2":
+                return self._segmentation_provider().is_available()
+            if key in SUPPORTED_GROUNDING_BACKENDS:
+                return self._grounding_provider(key).is_available()
+            if key in SUPPORTED_INPAINT_BACKENDS:
+                return self._inpaint_provider(key).is_available()
+            if key in SUPPORTED_INSTRUCTION_EDIT_BACKENDS:
+                return self._instruction_edit_provider(key).is_available()
+        except Exception:
+            pass
+        return get_adapter(key).is_available()
+
+    def _route_backend(
+        self,
+        *,
+        operation: RoutingOperation,
+        capability: RoutingCapability,
+        preferred_backend: str | None,
+        execution_preference: ExecutionPreference = ExecutionPreference.LOCAL_FIRST,
+    ):
+        try:
+            return route(
+                RoutingRequest(
+                    operation=operation,
+                    required_capability=capability,
+                    preferred_backend=preferred_backend,
+                    execution_preference=execution_preference,
+                ),
+                availability_probe=self._pipeline_availability_probe,
+            )
+        except RoutingError as exc:
+            message = str(exc)
+            if "does not support" in message:
+                raise PipelineBackendError(message) from exc
+            raise ModelUnavailableError(message) from exc
 
     @staticmethod
     def _prepare_local_adapter(adapter: ModelAdapter) -> None:

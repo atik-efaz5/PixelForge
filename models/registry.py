@@ -1,6 +1,7 @@
 """Lazy adapter registry. Construction does not load weights.
 
-Intelligent routing is Phase 10. Callers ask for a named adapter explicitly.
+Routing selects adapters via :mod:`models.router`; callers may also name a
+backend explicitly for debugging.
 """
 
 from __future__ import annotations

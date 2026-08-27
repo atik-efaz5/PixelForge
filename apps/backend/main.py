@@ -21,6 +21,7 @@ from apps.backend.schemas import (
     ModelsResponse,
     ModelInfo,
     RemoveObjectMetadata,
+    RoutingResponse,
     SegmentMetadata,
     SelectByTextMetadata,
 )
@@ -86,6 +87,13 @@ def build_router():
                 for entry in service.list_editing_capabilities()
             ]
         )
+
+    @router.get("/routing", response_model=RoutingResponse)
+    def routing(
+        service: Annotated[ImageEditingService, Depends(get_editing_service)],
+    ) -> RoutingResponse:
+        payload = service.list_routing()
+        return RoutingResponse(**payload)
 
     @router.post("/edit-by-instruction")
     async def edit_by_instruction(

@@ -93,6 +93,16 @@ class EditingCapabilitiesResponse(BaseModel):
     capabilities: list[EditingCapabilityEntry]
 
 
+class RoutingResponse(BaseModel):
+    """JSON response for ``GET /routing``."""
+
+    capabilities: list[dict[str, Any]]
+    operations: list[dict[str, str]]
+    execution_preferences: list[str]
+    automatic_backend_aliases: list[str]
+    known_models: list[str]
+
+
 class EditByInstructionMetadata(BaseModel):
     """JSON metadata for ``POST /edit-by-instruction``. Result pixels are returned as PNG."""
 

@@ -61,7 +61,7 @@ export function ImageEditor() {
   const [canSessionUndo, setCanSessionUndo] = useState(false);
   const [canSessionRedo, setCanSessionRedo] = useState(false);
   const [hasPendingResult, setHasPendingResult] = useState(false);
-  const [backend] = useState<InpaintBackend>("moebius");
+  const [backend, setBackend] = useState<InpaintBackend>("auto");
   const [textPrompt, setTextPrompt] = useState("");
   const [editInstruction, setEditInstruction] = useState("");
   const [detections, setDetections] = useState<DetectionInfo[]>([]);
@@ -729,6 +729,7 @@ export function ImageEditor() {
         <ControlPanel
           tool={tool}
           backend={backend}
+          onBackendChange={setBackend}
           brushRadius={brushRadius}
           eraserRadius={eraserRadius}
           morphAmount={morphAmount}

@@ -24,6 +24,26 @@ export interface ModelsResponse {
   models: ModelInfo[];
 }
 
+export interface RoutingCapabilityEntry {
+  capability: string;
+  models: Array<{
+    model: string;
+    backend: BackendType;
+    available: boolean;
+    runtime_validated: boolean;
+    status: ModelStatus;
+    display_name: string;
+  }>;
+}
+
+export interface RoutingResponse {
+  capabilities: RoutingCapabilityEntry[];
+  operations: Array<{ operation: string; required_capability: string }>;
+  execution_preferences: string[];
+  automatic_backend_aliases: string[];
+  known_models: string[];
+}
+
 export interface SegmentMetadata {
   confidence: number | null;
   model: string;
@@ -93,7 +113,7 @@ export interface DetectionInfo {
   box_xyxy: number[];
 }
 
-export type InpaintBackend = "moebius";
+export type InpaintBackend = "auto" | "moebius";
 
 export type EditorTool = "select" | "brush" | "erase";
 
