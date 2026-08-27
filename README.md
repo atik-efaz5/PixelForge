@@ -4,15 +4,23 @@
 
 PixelForge combines promptable segmentation, generative inpainting, structural and semantic consistency, model adapters and routing, quantitative evaluation, and a web interface into one reproducible research platform.
 
-> ## STATUS: PHASE 4 COMPLETE — 2 OF 7 MODELS VALIDATED
+> ## STATUS: PHASE 26 COMPLETE — LOCAL RELEASE AUDIT PASS
 >
-> **SAM 2.1 Hiera-Tiny is validated on Apple MPS and classified `LOCAL_MPS` (`PASS`).** Real segmentation inference executed on the Apple M3 Pro GPU from verified trained weights and produced valid non-empty masks — 0.1508 s warm, ~1.2 GiB driver-allocated, no CPU fallback, no modification to the research algorithm. Full record: `docs/experiments/SAM2_MPS_VALIDATION.md`.
+> PixelForge is a **working local image-editing platform** on Apple Silicon with
+> validated SAM 2 segmentation, Moebius inpainting, and Grounding DINO text
+> selection. See [`docs/RELEASE_READINESS.md`](docs/RELEASE_READINESS.md) for
+> the full audit and [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for setup.
 >
-> **Moebius is validated on Apple MPS and classified `LOCAL_MPS` (`CONDITIONAL`).** Real generative inpainting executed on the same GPU from verified trained weights and produced a valid non-empty 512×512 result — 21.9121 s warm, ~4.5 GiB driver-allocated, no CPU fallback, no modification to the research algorithm. The verdict is `CONDITIONAL`, not `PASS`, because student inference on Apple Silicon requires a documented PixelForge-side import-isolation workaround (to avoid loading the CUDA-only PixelHacker teacher) that does not alter the research method. No accuracy claim is made and it is not production-ready. Full record: `docs/experiments/MOEBIUS_MPS_VALIDATION.md`.
+> | Model | Classification | Runtime status |
+> |-------|----------------|----------------|
+> | SAM 2.1 Hiera-Tiny | `LOCAL_MPS` | **VALIDATED — PASS** |
+> | Moebius | `LOCAL_MPS` | **VALIDATED — CONDITIONAL** |
+> | Grounding DINO | `CPU` | **VALIDATED — PASS** (text selection) |
+> | PixelHacker | `CLOUD_GPU` | **NOT RUNTIME-VALIDATED** |
+> | InstructPix2Pix | `CLOUD_GPU` | **NOT RUNTIME-VALIDATED** |
 >
-> **This completes the two-model MVP dependency** — one segmentation backend plus one inpainting backend — but neither is wired into a pipeline yet, and the SAM 2 → Moebius handoff is verified only at the mask-contract level, not end to end. **The other five models remain unvalidated and unclassified.** All seven research repositories are cloned and pinned to exact commit SHAs (`research/upstream/LOCKFILE.md`), but acquisition is not validation. Every capability listed below is still **planned**, not working. No claim of working inference should be added for any component until a real execution on real hardware has been recorded for it.
->
-> A previous PixelForge working tree was deleted on 2026-08-24 with no git remote and no recoverable history. This rebuild treats provenance and recoverability as prerequisites rather than afterthoughts.
+> **Local deployment:** ready (conditional). **Internet-scale SaaS:** not validated.
+> Instruction-based editing requires a cloud GPU backend that is not yet implemented.
 
 ---
 
@@ -28,44 +36,43 @@ Three commitments shape the design:
 - **Honesty over capability claims.** A model is `UNAVAILABLE` until proven otherwise. Recorded failures are results, not embarrassments.
 - **Reproducibility over speed.** An unreproducible result is not a result.
 
-## Planned capabilities
+## Implemented capabilities
 
-Nothing below is implemented as a user-facing capability yet. SAM 2 segmentation (Phase 3) and Moebius inpainting (Phase 4) are validated as models but neither is wired into any pipeline.
+The local MVP path is **working end-to-end** (browser → FastAPI → SAM 2 →
+Moebius → result). Full validation records are in `docs/experiments/`.
 
 **Selection and masking**
-- Image upload
-- Intelligent object understanding
-- Click-based object selection
-- Natural-language object selection ("select the dog", "select all people")
-- Automatic segmentation
+- Image upload with client + server validation
+- Click-based object selection (SAM 2)
+- Natural-language object selection (Grounding DINO + SAM 2)
+- Smart selection (quality-ranked proposals)
 - Manual brush / eraser masking
-- Mask refinement
+- Mask refinement (dilate / erode)
 
 **Editing**
-- Object removal
-- Object replacement
-- Instruction-based editing
-- Reference-image editing
-- Structural preservation
-- Semantic consistency
+- Object removal (segment + inpaint)
+- Localized inpainting (Moebius)
+- Multiple candidate generation and ranking (up to 2)
+- Instruction-based editing UI — **backend returns 503** (cloud GPU not implemented)
 
 **Backends and execution**
-- Multiple inpainting backends
-- Model routing (local vs cloud, fast vs quality)
-- Local MPS inference where feasible
-- Cloud GPU inference where necessary
+- Model routing with `LOCAL_FIRST` default
+- Local MPS inference (SAM 2, Moebius)
+- CPU inference (Grounding DINO)
+- Persistent Moebius worker for warm latency
 
 **Review and analysis**
 - Before / mask / after comparison
-- Edit history
-- Reproducible experiment metadata
-- Evaluation metrics
-- Latency and memory measurement
-- Multiple candidate generation
-- Candidate ranking
+- Non-destructive edit history with undo/redo
+- Export result image
+- Evaluation metrics and benchmark harness
+- Reproducibility metadata on API responses
 
-**Future**
-- Video object removal with temporal consistency
+**Not yet available**
+- Cloud GPU backends (PixelHacker, InstructPix2Pix) — classified, not runtime-validated
+- ControlNet / BrushNet integration
+- Video editing
+- Multi-tenant / authenticated deployment
 
 ## Architecture
 
@@ -121,10 +128,10 @@ Each model is classified only after evidence, as one of:
 
 | Classification | Meaning | Assigned so far |
 |---|---|---|
-| `LOCAL_MPS` | Validated on Apple Metal on this host | **SAM 2.1 Hiera-Tiny** |
-| `CLOUD_GPU` | Requires remote CUDA execution | none |
-| `CPU` | Runs on CPU within acceptable limits | none |
-| `UNAVAILABLE` | Not viable; failure recorded | none |
+| `LOCAL_MPS` | Validated on Apple Metal on this host | **SAM 2** (`PASS`), **Moebius** (`CONDITIONAL`) |
+| `CLOUD_GPU` | Requires remote CUDA execution | **PixelHacker**, **InstructPix2Pix** (not runtime-validated) |
+| `CPU` | Runs on CPU within acceptable limits | **Grounding DINO** (`PASS`) |
+| `UNAVAILABLE` | Not viable or not integrated | ControlNet, BrushNet |
 
 See `docs/ENVIRONMENT_PLAN.md` for the full hardware and environment strategy.
 
@@ -209,43 +216,46 @@ tests/
 scripts/          Operational scripts
 ```
 
+## Quick start
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full procedure.
+
+```bash
+# Pre-flight
+python scripts/check_environment.py
+python scripts/check_models.py
+
+# Terminal 1 — backend
+./scripts/start_backend.sh
+
+# Terminal 2 — frontend
+./scripts/start_frontend.sh
+
+# Verify
+curl http://127.0.0.1:8000/health
+```
+
+Open **http://127.0.0.1:3000** in a browser.
+
 ## Roadmap
 
 | Phase | Scope | State |
 |---|---|---|
-| 1 | Project foundation and provenance | Complete |
-| 2 | Acquire and pin research repositories | **Complete** |
-| 3 | Re-establish SAM 2 (first reproducibility gate) | **Complete — `PASS`, `LOCAL_MPS`** |
-| 4 | Moebius feasibility on MPS | In progress |
-| 5 | PixelHacker feasibility — local vs cloud | Not started |
-| 6 | Model adapter architecture | Not started |
-| 7 | Core inference pipeline | Not started |
-| 8 | FastAPI backend | Not started |
-| 9 | Frontend MVP | Not started |
-| 10 | Model routing | Not started |
-| 11 | Text-guided selection | Not started |
-| 12 | Advanced editing | Not started |
-| 13 | Evaluation | Not started |
-| 14 | Edit history | Not started |
-| 15 | Research extensions | Not started |
-
-### MVP definition
-
-The first usable milestone is a single working path, not a feature matrix:
-
-```
-UPLOAD IMAGE → CLICK OBJECT → SAM 2 SEGMENTATION → EDITABLE MASK
-  → ONE VALIDATED INPAINTING BACKEND → RESULT IMAGE
-    → BEFORE / MASK / AFTER → BASIC PERFORMANCE METADATA
-```
-
-Advanced features wait until this works end to end.
+| 1–5 | Foundation, repos, model validation gates | **Complete** |
+| 6–9 | Adapters, pipeline, backend, frontend MVP | **Complete** |
+| 10–14 | E2E validation, routing, text selection, evaluation, history | **Complete** |
+| 15–22 | Quality, candidates, smart selection, benchmarks | **Complete** |
+| 23–24 | Production hardening + operational readiness | **Complete** |
+| 25–26 | Deployment packaging + release audit | **Complete** |
+| Future | Cloud GPU workers, instruction editing, ControlNet/BrushNet | Not started |
 
 ## Security
 
-- Secrets are supplied via environment variables; `.env` is never committed. A tracked `.env.example` will document required keys once the project actually has any — it does not exist yet, as no secret is required in Phase 1.
-- No credentials are hard-coded
-- No API keys enter git history
+- Secrets are supplied via environment variables; `.env` is never committed
+- Configuration template: `configs/deployment.env.example`, `apps/frontend/.env.example`
+- Upload limits, CORS allowlist, and input validation enforced server-side
+- No credentials are hard-coded; no API keys in git history
+- See `docs/experiments/PRODUCTION_HARDENING.md` for the full control matrix
 
 ## Licensing
 
