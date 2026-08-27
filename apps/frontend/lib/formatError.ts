@@ -37,5 +37,11 @@ export function toUserFacingError(raw: unknown): UserFacingError {
       recovery: "Select or draw a mask region before generating.",
     };
   }
+  if (lower.includes("edit session not initialized") || lower.includes("edit session could not")) {
+    return {
+      message,
+      recovery: "Upload the image again or click New session to reset the editor.",
+    };
+  }
   return { message, recovery: "You can dismiss this and continue editing." };
 }

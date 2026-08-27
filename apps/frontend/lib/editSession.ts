@@ -122,7 +122,9 @@ export class EditSessionHistory {
 
   append(input: AppendSnapshotInput): EditSessionSnapshot {
     if (!this.originalUrl) {
-      throw new Error("Edit session not initialized.");
+      throw new Error(
+        "Edit session not initialized. Load an image to start a new editing session."
+      );
     }
 
     if (this.index < this.entries.length - 1) {

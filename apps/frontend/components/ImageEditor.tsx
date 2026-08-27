@@ -1006,12 +1006,20 @@ export function ImageEditor() {
     handleUndo,
   ]);
 
+  // Revoke replaced blob URLs when imageUrl changes or the editor unmounts.
+  // Do not dispose the edit session here — resetSession owns session lifecycle.
   useEffect(() => {
+    const url = imageUrl;
     return () => {
-      revokeIfObjectUrl(imageUrl);
-      sessionHistoryRef.current.dispose();
+      revokeIfObjectUrl(url);
     };
   }, [imageUrl]);
+
+  useEffect(() => {
+    return () => {
+      sessionHistoryRef.current.dispose();
+    };
+  }, []);
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
