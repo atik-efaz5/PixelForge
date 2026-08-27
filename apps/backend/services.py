@@ -12,6 +12,14 @@ from fastapi import UploadFile
 from PIL import Image
 
 from apps.backend.errors import InvalidInputError
+from apps.backend.validation import (
+    MASK_INPAINT_THRESHOLD,
+    MAX_IMAGE_PIXELS,
+    decode_mask_bytes,
+    normalize_upload_image,
+    require_nonempty_mask,
+    validate_inpaint_params_fields,
+)
 from apps.backend.isolated_runner import ground_via_isolated_env, inpaint_via_isolated_env
 from models.errors import ModelLoadError
 from models.registry import get_adapter, known_models
@@ -33,9 +41,9 @@ from pipelines.types import ImageEditPipelineResult, MaskRefinementOps
 
 logger = logging.getLogger(__name__)
 
-# MVP upload limits (pixels). Tune via env later if needed.
-_MAX_IMAGE_PIXELS = 16_777_216  # 4096×4096
-_MASK_INPAINT_THRESHOLD = 128
+# MVP upload limits — see apps.backend.validation for bounds.
+_MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+_MASK_INPAINT_THRESHOLD = MASK_INPAINT_THRESHOLD
 
 # Mask PNG contract (documented for API clients):
 # - Upload: grayscale or RGB PNG where pixel value >= 128 means inpaint (True).
@@ -211,43 +219,22 @@ class ImageEditingService:
 
 async def decode_upload_image(upload: UploadFile) -> np.ndarray:
     """Decode a multipart image upload to H×W×3 uint8 RGB."""
-    if upload.content_type and not upload.content_type.startswith("image/"):
-        raise InvalidInputError(f"Expected an image upload, got {upload.content_type}.")
     raw = await upload.read()
-    if not raw:
-        raise InvalidInputError("Image upload is empty.")
-    try:
-        pil = Image.open(io.BytesIO(raw))
-        pil.load()
-    except Exception as exc:
-        raise InvalidInputError("Could not decode image upload.") from exc
-    if pil.width * pil.height > _MAX_IMAGE_PIXELS:
-        raise InvalidInputError("Image exceeds the maximum allowed pixel count.")
-    return pil_rgb_to_array(pil)
+    return normalize_upload_image(raw, content_type=upload.content_type)
 
 
 async def decode_upload_mask(
     upload: UploadFile,
     *,
     image: np.ndarray | None = None,
+    require_nonempty: bool = False,
+    context: str = "inpaint",
 ) -> np.ndarray:
     """Decode a mask PNG to bool H×W (white/255 = inpaint)."""
     raw = await upload.read()
-    if not raw:
-        raise InvalidInputError("Mask upload is empty.")
-    try:
-        pil = Image.open(io.BytesIO(raw))
-        pil.load()
-    except Exception as exc:
-        raise InvalidInputError("Could not decode mask upload.") from exc
-    gray = np.asarray(pil.convert("L"))
-    if gray.ndim != 2:
-        raise InvalidInputError("Mask must decode to a single-channel image.")
-    mask = gray >= _MASK_INPAINT_THRESHOLD
-    if image is not None:
-        validate_mask(mask, image=image)
-    else:
-        validate_mask(mask)
+    mask = decode_mask_bytes(raw, image=image)
+    if require_nonempty:
+        require_nonempty_mask(mask, context=context)
     return mask
 
 
@@ -302,6 +289,13 @@ def parse_inpaint_params(
     }
     if all(value is None for value in fields.values()):
         return None
+    validate_inpaint_params_fields(
+        num_steps=num_steps,
+        guidance_scale=guidance_scale,
+        strength=strength,
+        noise_offset=noise_offset,
+        image_size=image_size,
+    )
     return InpaintParams(**fields)
 
 

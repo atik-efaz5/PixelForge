@@ -28,6 +28,24 @@ logger = logging.getLogger(__name__)
 
 _INPAINT_WORKER = project_root() / "scripts" / "isolated_inpaint_worker.py"
 _GROUNDING_WORKER = project_root() / "scripts" / "isolated_grounding_worker.py"
+_SUBPROCESS_TIMEOUT_SEC = float(os.environ.get("PIXELFORGE_SUBPROCESS_TIMEOUT", "600"))
+
+
+def _run_isolated(cmd: list[str], *, label: str) -> subprocess.CompletedProcess[str]:
+    """Run an isolated worker subprocess with timeout and captured output."""
+    try:
+        return subprocess.run(
+            cmd,
+            cwd=str(project_root()),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_SUBPROCESS_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ModelInferenceError(
+            f"{label} timed out after {_SUBPROCESS_TIMEOUT_SEC:.0f}s"
+        ) from exc
 
 
 def _env_python(env_name: str, *, override_var: str) -> Path:
@@ -64,12 +82,9 @@ def ground_via_isolated_env(image: np.ndarray, prompt: str) -> GroundingResult:
         tmp_path = Path(tmp)
         image_path = tmp_path / "image.png"
         Image.fromarray(image).save(image_path)
-        proc = subprocess.run(
+        proc = _run_isolated(
             [str(python), str(_GROUNDING_WORKER), str(image_path), prompt],
-            cwd=str(project_root()),
-            capture_output=True,
-            text=True,
-            check=False,
+            label="Grounding DINO isolated inference",
         )
         if proc.returncode != 0:
             detail = (proc.stderr or proc.stdout or "").strip()[-500:]
@@ -129,12 +144,9 @@ def inpaint_via_isolated_env(
         Image.fromarray(image).save(image_path)
         Image.fromarray((mask.astype(np.uint8) * 255), mode="L").save(mask_path)
 
-        proc = subprocess.run(
+        proc = _run_isolated(
             [str(python), str(_INPAINT_WORKER), str(image_path), str(mask_path), str(out_path)],
-            cwd=str(project_root()),
-            capture_output=True,
-            text=True,
-            check=False,
+            label="Moebius isolated inference",
         )
         if proc.returncode != 0:
             detail = (proc.stderr or proc.stdout or "").strip()[-500:]

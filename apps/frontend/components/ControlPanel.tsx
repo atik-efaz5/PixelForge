@@ -133,6 +133,7 @@ export function ControlPanel({
           type="button"
           disabled={busy || !textPrompt.trim()}
           onClick={onFindObject}
+          aria-label="Find object by text description"
           style={{ ...secondaryButtonStyle, marginTop: 8 }}
         >
           Find Object
@@ -159,6 +160,7 @@ export function ControlPanel({
             type="button"
             aria-pressed={tool === "select"}
             disabled={busy}
+            aria-label="Click to select object on image"
             onClick={() => onToolChange("select")}
             style={toolButtonStyle(tool === "select")}
           >
@@ -350,6 +352,7 @@ export function ControlPanel({
           onClick={onGenerate}
           style={primaryButtonStyle}
           aria-busy={busy}
+          aria-label="Fill selected region with Moebius inpainting"
         >
           {busy ? "Generating…" : "Fill selected region"}
         </button>

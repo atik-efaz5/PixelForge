@@ -34,6 +34,7 @@ from apps.backend.services import (
     png_response_headers,
     segmentation_backend,
 )
+from apps.backend.validation import validate_point
 from pipelines.types import MaskRefinementOps
 
 logger = logging.getLogger(__name__)
@@ -128,6 +129,7 @@ def build_router():
         y: int = Form(..., description="Prompt Y coordinate (row)."),
     ) -> Response:
         rgb = await decode_upload_image(image)
+        validate_point(rgb, x, y)
         result = service.segment(rgb, x, y)
         meta = SegmentMetadata(
             confidence=result.confidence,
@@ -161,7 +163,7 @@ def build_router():
         image_size: int | None = Form(None),
     ) -> Response:
         rgb = await decode_upload_image(image)
-        mask_arr = await decode_upload_mask(mask, image=rgb)
+        mask_arr = await decode_upload_mask(mask, image=rgb, require_nonempty=True)
         params = parse_inpaint_params(
             num_steps=num_steps,
             guidance_scale=guidance_scale,
@@ -211,6 +213,7 @@ def build_router():
         image_size: int | None = Form(None),
     ) -> Response:
         rgb = await decode_upload_image(image)
+        validate_point(rgb, x, y)
         refinement: MaskRefinementOps | None = None
         if add_mask is not None or remove_mask is not None or dilate or erode:
             add_arr = (

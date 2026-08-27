@@ -60,7 +60,8 @@ export interface RemoveObjectMetadata {
 }
 
 export interface ApiErrorBody {
-  error: string;
+  error: string | { code: string; message: string };
+  code?: string;
   message: string;
   details?: unknown;
 }
@@ -98,6 +99,7 @@ export type EditorTool = "select" | "brush" | "erase";
 
 export type EditorStatus =
   | "idle"
+  | "uploading"
   | "segmenting"
   | "grounding"
   | "generating"

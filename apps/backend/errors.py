@@ -34,7 +34,13 @@ class ResourceNotFoundError(Exception):
 
 
 def error_body(code: str, message: str, **extra: Any) -> dict[str, Any]:
-    body: dict[str, Any] = {"error": code, "message": message}
+    """Structured error payload with legacy top-level fields for older clients."""
+    body: dict[str, Any] = {
+        "error": {"code": code, "message": message},
+        # Legacy flat fields (do not remove — existing clients read these).
+        "code": code,
+        "message": message,
+    }
     body.update(extra)
     return body
 

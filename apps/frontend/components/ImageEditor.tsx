@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { editByInstruction, inpaint, segment, selectByText } from "@/lib/api";
+import { deriveEditorPhase, PHASE_LABELS } from "@/lib/editorPhase";
+import { validateImageFile } from "@/lib/imageUpload";
 import {
   EditSessionHistory,
   type EditSessionSnapshot,
@@ -75,6 +77,15 @@ export function ImageEditor() {
   const lastSelectionMetaRef = useRef<SelectionMetadata | undefined>(undefined);
 
   const busy = status !== "idle";
+
+  const editorPhase = deriveEditorPhase({
+    status,
+    error,
+    hasMask: Boolean(mask && maskHasInpaint(mask)),
+    hasPendingResult,
+    tool,
+  });
+  const phaseLabel = PHASE_LABELS[editorPhase];
 
   const syncMaskHistoryFlags = useCallback(() => {
     const history = maskHistoryRef.current;
@@ -206,17 +217,23 @@ export function ImageEditor() {
   );
 
   const handleUpload = useCallback(
-    (file: File) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        resetSession(file, url, { width: img.naturalWidth, height: img.naturalHeight });
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        setError("Could not load the selected image.");
-      };
-      img.src = url;
+    async (file: File) => {
+      setStatus("uploading");
+      setError(null);
+      try {
+        const validated = await validateImageFile(file);
+        const url = URL.createObjectURL(validated.file);
+        resetSession(validated.file, url, {
+          width: validated.width,
+          height: validated.height,
+        });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Could not load the selected image.";
+        setError(message);
+      } finally {
+        setStatus("idle");
+      }
     },
     [resetSession]
   );
@@ -628,6 +645,19 @@ export function ImageEditor() {
               {error}
             </div>
           ) : null}
+          <div
+            aria-live="polite"
+            style={{
+              marginBottom: 12,
+              padding: "8px 12px",
+              borderRadius: 6,
+              background: editorPhase === "error" ? "#3f1d1d" : "#172554",
+              color: editorPhase === "error" ? "#fecaca" : "#bfdbfe",
+              fontSize: 13,
+            }}
+          >
+            Status: {phaseLabel}
+          </div>
           {busy ? (
             <div
               aria-live="polite"
@@ -640,13 +670,15 @@ export function ImageEditor() {
                 fontSize: 13,
               }}
             >
-              {status === "segmenting"
-                ? "Segmenting…"
-                : status === "grounding"
-                  ? "Finding object…"
-                  : status === "instruction_editing"
-                    ? "Applying instruction…"
-                    : "Generating result…"}
+              {status === "uploading"
+                ? "Uploading image…"
+                : status === "segmenting"
+                  ? "Segmenting…"
+                  : status === "grounding"
+                    ? "Finding object…"
+                    : status === "instruction_editing"
+                      ? "Applying instruction…"
+                      : "Generating result…"}
             </div>
           ) : null}
 

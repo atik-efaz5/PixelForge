@@ -59,8 +59,16 @@ function parseHeaderMetadata<T extends object>(
 async function parseErrorMessage(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as ApiErrorBody;
+    if (
+      body.error &&
+      typeof body.error === "object" &&
+      "message" in body.error &&
+      body.error.message
+    ) {
+      return body.error.message;
+    }
     if (body.message) return body.message;
-    if (body.error) return body.error;
+    if (typeof body.error === "string") return body.error;
   } catch {
     // Response body is not JSON.
   }
