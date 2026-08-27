@@ -73,7 +73,7 @@ class TestMaskValidation(unittest.TestCase):
     def test_rejects_dimension_mismatch(self) -> None:
         image = validate_image(np.zeros((16, 16, 3), dtype=np.uint8))
         mask_png = _png_bytes("L", (8, 8))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(InvalidInputError):
             decode_mask_bytes(mask_png, image=image)
 
     def test_rejects_empty_inpaint_region(self) -> None:

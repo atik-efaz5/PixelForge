@@ -12,13 +12,16 @@ from fastapi import UploadFile
 from PIL import Image
 
 from apps.backend.errors import InvalidInputError
+from apps.backend.settings import get_settings
 from apps.backend.validation import (
     MASK_INPAINT_THRESHOLD,
     MAX_IMAGE_PIXELS,
     decode_mask_bytes,
     normalize_upload_image,
     require_nonempty_mask,
+    sanitize_filename,
     validate_inpaint_params_fields,
+    validate_instruction_edit_params_fields,
 )
 from apps.backend.isolated_runner import ground_via_isolated_env, inpaint_via_isolated_env
 from models.errors import ModelLoadError
@@ -310,9 +313,29 @@ class ImageEditingService:
         )
 
 
+async def read_upload_bytes(upload: UploadFile, *, max_bytes: int) -> bytes:
+    """Read an upload in chunks with a hard byte-size cap."""
+    safe_name = sanitize_filename(getattr(upload, "filename", None))
+    logger.debug("upload_read name=%s max_bytes=%d", safe_name, max_bytes)
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await upload.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise InvalidInputError(
+                f"Upload exceeds maximum size ({max_bytes} bytes)."
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 async def decode_upload_image(upload: UploadFile) -> np.ndarray:
     """Decode a multipart image upload to H×W×3 uint8 RGB."""
-    raw = await upload.read()
+    settings = get_settings()
+    raw = await read_upload_bytes(upload, max_bytes=settings.max_upload_bytes)
     return normalize_upload_image(raw, content_type=upload.content_type)
 
 
@@ -324,7 +347,8 @@ async def decode_upload_mask(
     context: str = "inpaint",
 ) -> np.ndarray:
     """Decode a mask PNG to bool H×W (white/255 = inpaint)."""
-    raw = await upload.read()
+    settings = get_settings()
+    raw = await read_upload_bytes(upload, max_bytes=settings.max_mask_upload_bytes)
     mask = decode_mask_bytes(raw, image=image)
     if require_nonempty:
         require_nonempty_mask(mask, context=context)
@@ -472,6 +496,12 @@ def parse_instruction_edit_params(
     }
     if all(value is None for value in fields.values()):
         return None
+    validate_instruction_edit_params_fields(
+        num_steps=num_steps,
+        guidance_text=guidance_text,
+        guidance_image=guidance_image,
+        resolution=resolution,
+    )
     return InstructionEditParams(**fields)
 
 

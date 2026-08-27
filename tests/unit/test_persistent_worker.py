@@ -15,12 +15,23 @@ from models.errors import ModelInferenceError
 
 
 class TestPersistentWorkerConfig(unittest.TestCase):
+    def tearDown(self) -> None:
+        from apps.backend.settings import reset_settings_cache
+
+        reset_settings_cache()
+
     def test_enabled_by_default(self) -> None:
         with mock.patch.dict("os.environ", {}, clear=True):
+            from apps.backend.settings import reset_settings_cache
+
+            reset_settings_cache()
             self.assertTrue(persistent_moebius_enabled())
 
     def test_disabled_with_zero(self) -> None:
         with mock.patch.dict("os.environ", {"PIXELFORGE_MOEBIUS_PERSISTENT_WORKER": "0"}):
+            from apps.backend.settings import reset_settings_cache
+
+            reset_settings_cache()
             self.assertFalse(persistent_moebius_enabled())
 
 

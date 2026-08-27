@@ -9,6 +9,9 @@ from pydantic import BaseModel, Field
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+    version: str = "0.1.0"
+    max_upload_bytes: int | None = None
+    max_concurrent_generations: int | None = None
 
 
 class ModelInfo(BaseModel):

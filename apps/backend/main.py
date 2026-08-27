@@ -6,12 +6,15 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Form, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
+from apps.backend.concurrency import generation_slot
 from apps.backend.dependencies import configure_cors, get_editing_service
-from apps.backend.errors import register_exception_handlers
+from apps.backend.errors import InvalidInputError, register_exception_handlers
 from apps.backend.isolated_runner import shutdown_persistent_workers
+from apps.backend.middleware import RequestContextMiddleware
+from apps.backend.settings import get_settings
 from apps.backend.schemas import (
     EditByInstructionMetadata,
     EditingCapabilitiesResponse,
@@ -40,7 +43,12 @@ from apps.backend.services import (
     png_response_headers,
     segmentation_backend,
 )
-from apps.backend.validation import validate_candidate_count_field, validate_point
+from apps.backend.validation import (
+    validate_candidate_count_field,
+    validate_morph_amount,
+    validate_point,
+    validate_text_field,
+)
 from pipelines.types import MaskRefinementOps
 
 logger = logging.getLogger(__name__)
@@ -59,10 +67,15 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=_app_lifespan,
     )
+    application.add_middleware(RequestContextMiddleware)
     configure_cors(application)
     register_exception_handlers(application)
     application.include_router(build_router())
     return application
+
+
+def _request_id(request: Request) -> str:
+    return getattr(request.state, "request_id", "-")
 
 
 def build_router():
@@ -72,7 +85,13 @@ def build_router():
 
     @router.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
-        return HealthResponse()
+        settings = get_settings()
+        return HealthResponse(
+            status="ok",
+            version="0.1.0",
+            max_upload_bytes=settings.max_upload_bytes,
+            max_concurrent_generations=settings.max_concurrent_generations,
+        )
 
     @router.get("/models", response_model=ModelsResponse)
     def models(
@@ -100,6 +119,7 @@ def build_router():
 
     @router.post("/edit-by-instruction")
     async def edit_by_instruction(
+        request: Request,
         service: Annotated[ImageEditingService, Depends(get_editing_service)],
         image: UploadFile = File(..., description="RGB image."),
         instruction: str = Form(
@@ -112,19 +132,26 @@ def build_router():
         guidance_image: float | None = Form(None),
         resolution: int | None = Form(None),
     ) -> Response:
+        settings = get_settings()
         rgb = await decode_upload_image(image)
+        prompt = validate_text_field(
+            instruction,
+            field_name="instruction",
+            max_length=settings.max_instruction_length,
+        )
         params = parse_instruction_edit_params(
             num_steps=num_steps,
             guidance_text=guidance_text,
             guidance_image=guidance_image,
             resolution=resolution,
         )
-        result = service.edit_by_instruction(
-            rgb,
-            instruction,
-            backend=backend,
-            params=params,
-        )
+        with generation_slot(operation="edit_by_instruction", request_id=_request_id(request)):
+            result = service.edit_by_instruction(
+                rgb,
+                prompt,
+                backend=backend,
+                params=params,
+            )
         meta = EditByInstructionMetadata(
             model=result.model,
             backend=backend_label(result.backend),
@@ -168,6 +195,7 @@ def build_router():
 
     @router.post("/inpaint")
     async def inpaint(
+        request: Request,
         service: Annotated[ImageEditingService, Depends(get_editing_service)],
         image: UploadFile = File(..., description="RGB image."),
         mask: UploadFile = File(
@@ -200,7 +228,8 @@ def build_router():
             seed=seed,
         )
         if count == 1:
-            result = service.inpaint(rgb, mask_arr, backend=backend, params=params)
+            with generation_slot(operation="inpaint", request_id=_request_id(request)):
+                result = service.inpaint(rgb, mask_arr, backend=backend, params=params)
             meta = InpaintMetadata(
                 model=result.model,
                 backend=backend_label(result.backend),
@@ -216,13 +245,14 @@ def build_router():
                 headers=headers,
             )
 
-        candidates_result = service.generate_candidates(
-            rgb,
-            mask_arr,
-            backend=backend,
-            params=params,
-            count=count,
-        )
+        with generation_slot(operation="inpaint_candidates", request_id=_request_id(request)):
+            candidates_result = service.generate_candidates(
+                rgb,
+                mask_arr,
+                backend=backend,
+                params=params,
+                count=count,
+            )
         metadata = build_inpaint_candidates_metadata(candidates_result)
         png_parts = [
             (candidate.candidate_id, image_to_png_bytes(candidate.result))
@@ -233,6 +263,7 @@ def build_router():
 
     @router.post("/remove-object")
     async def remove_object(
+        request: Request,
         service: Annotated[ImageEditingService, Depends(get_editing_service)],
         image: UploadFile = File(..., description="RGB image."),
         x: int = Form(..., description="Object point X (column)."),
@@ -257,6 +288,8 @@ def build_router():
     ) -> Response:
         rgb = await decode_upload_image(image)
         validate_point(rgb, x, y)
+        dilate = validate_morph_amount(dilate, field_name="dilate")
+        erode = validate_morph_amount(erode, field_name="erode")
         refinement: MaskRefinementOps | None = None
         if add_mask is not None or remove_mask is not None or dilate or erode:
             add_arr = (
@@ -281,14 +314,15 @@ def build_router():
             noise_offset=noise_offset,
             image_size=image_size,
         )
-        result = service.remove_object(
-            rgb,
-            x,
-            y,
-            backend=backend,
-            refinement=refinement,
-            params=params,
-        )
+        with generation_slot(operation="remove_object", request_id=_request_id(request)):
+            result = service.remove_object(
+                rgb,
+                x,
+                y,
+                backend=backend,
+                refinement=refinement,
+                params=params,
+            )
         meta = RemoveObjectMetadata(
             model=result.selected_model,
             backend=backend_label(result.backend),
@@ -316,10 +350,18 @@ def build_router():
         detection_index: int = Form(0, description="Which detection to segment when multiple."),
         grounding_backend: str = Form("grounding_dino"),
     ) -> Response:
+        settings = get_settings()
         rgb = await decode_upload_image(image)
+        clean_prompt = validate_text_field(
+            prompt,
+            field_name="prompt",
+            max_length=settings.max_prompt_length,
+        )
+        if detection_index < 0:
+            raise InvalidInputError("detection_index must be non-negative.")
         result = service.select_by_text(
             rgb,
-            prompt,
+            clean_prompt,
             detection_index=detection_index,
             grounding_backend=grounding_backend,
         )
@@ -372,14 +414,24 @@ def build_router():
         ),
         grounding_backend: str = Form("grounding_dino"),
     ) -> Response:
+        settings = get_settings()
         rgb = await decode_upload_image(image)
         if x is not None and y is not None:
             validate_point(rgb, x, y)
+        text_prompt = None
+        if prompt is not None and prompt.strip():
+            text_prompt = validate_text_field(
+                prompt,
+                field_name="prompt",
+                max_length=settings.max_prompt_length,
+            )
+        if detection_index is not None and detection_index < 0:
+            raise InvalidInputError("detection_index must be non-negative.")
         result = service.select_smart(
             rgb,
             x=x,
             y=y,
-            text_prompt=prompt,
+            text_prompt=text_prompt,
             selection_mode=selection_mode,
             detection_index=detection_index,
             grounding_backend=grounding_backend,

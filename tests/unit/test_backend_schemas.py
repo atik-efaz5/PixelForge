@@ -59,7 +59,13 @@ class TestMediaHelpers(unittest.IsolatedAsyncioTestCase):
         buf.seek(0)
 
         class _Upload:
-            async def read(self) -> bytes:
+            filename = "mask.png"
+            _sent = False
+
+            async def read(self, size: int = -1) -> bytes:  # noqa: ARG002
+                if self._sent:
+                    return b""
+                self._sent = True
                 return buf.getvalue()
 
         mask = await decode_upload_mask(_Upload())

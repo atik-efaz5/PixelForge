@@ -18,6 +18,7 @@ import type {
 } from "@/types/api";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_REQUEST_TIMEOUT_MS = 600_000;
 
 export function apiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || DEFAULT_BASE_URL;
@@ -71,6 +72,13 @@ async function parseErrorMessage(response: Response): Promise<string> {
       "message" in body.error &&
       body.error.message
     ) {
+      const code =
+        "code" in body.error && typeof body.error.code === "string"
+          ? body.error.code
+          : body.code;
+      if (code === "service_busy" || code === "worker_timeout") {
+        return `${body.error.message} Please wait and try again.`;
+      }
       return body.error.message;
     }
     if (body.message) return body.message;
@@ -79,6 +87,28 @@ async function parseErrorMessage(response: Response): Promise<string> {
     // Response body is not JSON.
   }
   return `Request failed (${response.status})`;
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Request timed out. The server may still be processing.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function readPngResponse<T extends object>(
@@ -191,7 +221,7 @@ export type InpaintResponse =
   | { mode: "candidates"; response: InpaintCandidatesResponse };
 
 export async function health(): Promise<HealthResponse> {
-  const response = await fetch(`${apiBaseUrl()}/health`);
+  const response = await fetchWithTimeout(`${apiBaseUrl()}/health`);
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
@@ -224,7 +254,7 @@ export async function segment(
   form.append("x", String(x));
   form.append("y", String(y));
 
-  const response = await fetch(`${apiBaseUrl()}/segment`, {
+  const response = await fetchWithTimeout(`${apiBaseUrl()}/segment`, {
     method: "POST",
     body: form,
   });
@@ -251,7 +281,7 @@ export async function inpaint(
   const candidateCount = options?.candidateCount ?? 1;
   form.append("candidate_count", String(candidateCount));
 
-  const response = await fetch(`${apiBaseUrl()}/inpaint`, {
+  const response = await fetchWithTimeout(`${apiBaseUrl()}/inpaint`, {
     method: "POST",
     body: form,
   });
@@ -284,7 +314,7 @@ export async function selectByText(
   form.append("detection_index", String(detectionIndex));
   form.append("grounding_backend", "grounding_dino");
 
-  const response = await fetch(`${apiBaseUrl()}/select-by-text`, {
+  const response = await fetchWithTimeout(`${apiBaseUrl()}/select-by-text`, {
     method: "POST",
     body: form,
   });
@@ -326,7 +356,7 @@ export async function selectSmart(
   }
   form.append("grounding_backend", "grounding_dino");
 
-  const response = await fetch(`${apiBaseUrl()}/select-smart`, {
+  const response = await fetchWithTimeout(`${apiBaseUrl()}/select-smart`, {
     method: "POST",
     body: form,
   });
@@ -369,7 +399,7 @@ export async function removeObject(
     void mask;
   }
 
-  const response = await fetch(`${apiBaseUrl()}/remove-object`, {
+  const response = await fetchWithTimeout(`${apiBaseUrl()}/remove-object`, {
     method: "POST",
     body: form,
   });
@@ -395,7 +425,7 @@ export async function editByInstruction(
   form.append("instruction", instruction);
   form.append("backend", backend);
 
-  const response = await fetch(`${apiBaseUrl()}/edit-by-instruction`, {
+  const response = await fetchWithTimeout(`${apiBaseUrl()}/edit-by-instruction`, {
     method: "POST",
     body: form,
   });

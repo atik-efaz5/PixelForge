@@ -14,17 +14,13 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from apps.backend.settings import get_settings
 from models.config import project_root
 from models.errors import ModelInferenceError, ModelLoadError
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_STARTUP_TIMEOUT_SEC = float(
-    os.environ.get("PIXELFORGE_WORKER_STARTUP_TIMEOUT", "180")
-)
-_DEFAULT_REQUEST_TIMEOUT_SEC = float(
-    os.environ.get("PIXELFORGE_WORKER_REQUEST_TIMEOUT", "600")
-)
+_MAX_JSON_LINE_BYTES = 8 * 1024 * 1024
 
 
 class WorkerCrashedError(RuntimeError):
@@ -44,17 +40,20 @@ class LineJsonWorkerClient:
         name: str,
         python: Path,
         script: Path,
-        startup_timeout_sec: float = _DEFAULT_STARTUP_TIMEOUT_SEC,
-        request_timeout_sec: float = _DEFAULT_REQUEST_TIMEOUT_SEC,
+        startup_timeout_sec: float | None = None,
+        request_timeout_sec: float | None = None,
     ) -> None:
         self.name = name
         self.python = python
         self.script = script
-        self.startup_timeout_sec = startup_timeout_sec
-        self.request_timeout_sec = request_timeout_sec
+        settings = get_settings()
+        self.startup_timeout_sec = startup_timeout_sec or settings.worker_startup_timeout_sec
+        self.request_timeout_sec = request_timeout_sec or settings.worker_request_timeout_sec
         self._proc: subprocess.Popen[str] | None = None
         self._lock = threading.Lock()
         self._started = False
+        self._stderr_thread: threading.Thread | None = None
+        self._stderr_tail = ""
 
     @property
     def is_running(self) -> bool:
@@ -140,7 +139,26 @@ class LineJsonWorkerClient:
             cwd=str(project_root()),
             env=env,
         )
+        self._start_stderr_drain()
         logger.info("%s worker spawned pid=%s", self.name, self._proc.pid)
+
+    def _start_stderr_drain(self) -> None:
+        proc = self._proc
+        if proc is None or proc.stderr is None:
+            return
+
+        def _drain() -> None:
+            assert proc.stderr is not None
+            for line in proc.stderr:
+                self._stderr_tail = (self._stderr_tail + line)[-4000:]
+                logger.debug("%s worker stderr: %s", self.name, line.rstrip())
+
+        self._stderr_thread = threading.Thread(
+            target=_drain,
+            name=f"{self.name}-stderr",
+            daemon=True,
+        )
+        self._stderr_thread.start()
 
     def _write_line_locked(self, payload: dict[str, Any]) -> None:
         if self._proc is None or self._proc.stdin is None:
@@ -165,9 +183,7 @@ class LineJsonWorkerClient:
             if not ready:
                 if self._proc.poll() is not None:
                     code = self._proc.returncode
-                    stderr = ""
-                    if self._proc.stderr is not None:
-                        stderr = self._proc.stderr.read()[-500:]
+                    stderr = self._stderr_tail[-500:]
                     self._proc = None
                     raise WorkerCrashedError(
                         f"{self.name} worker exited (code {code}). {stderr}"
@@ -182,6 +198,8 @@ class LineJsonWorkerClient:
             line = line.strip()
             if not line.startswith("{"):
                 continue
+            if len(line.encode("utf-8")) > _MAX_JSON_LINE_BYTES:
+                raise ModelInferenceError(f"{self.name} worker response too large")
             try:
                 return json.loads(line)
             except json.JSONDecodeError:

@@ -2,6 +2,7 @@
 
 export const MIN_IMAGE_DIMENSION = 8;
 export const MAX_IMAGE_PIXELS = 16_777_216;
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 export interface ValidatedImage {
   file: File;
@@ -12,6 +13,14 @@ export interface ValidatedImage {
 export function validateImageFile(file: File): Promise<ValidatedImage> {
   if (!file.size) {
     return Promise.reject(new Error("Image file is empty."));
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return Promise.reject(
+      new Error(
+        `Image file is too large (${Math.round(file.size / (1024 * 1024))} MB). ` +
+          `Maximum is ${Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB.`
+      )
+    );
   }
   if (!file.type.startsWith("image/")) {
     return Promise.reject(

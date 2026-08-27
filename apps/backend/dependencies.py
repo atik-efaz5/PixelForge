@@ -1,38 +1,54 @@
-"""FastAPI dependencies and development CORS settings."""
+"""FastAPI dependencies and CORS settings."""
 
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.backend.services import ImageEditingService
+from apps.backend.settings import get_settings
 from pipelines.orchestration.image_edit_pipeline import ImageEditPipeline
 
-# Narrow dev origins; override via PIXELFORGE_CORS_ORIGINS (comma-separated).
-_DEFAULT_CORS_ORIGINS = (
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-)
-
-
-def cors_origins() -> list[str]:
-    raw = os.environ.get("PIXELFORGE_CORS_ORIGINS", "").strip()
-    if not raw:
-        return list(_DEFAULT_CORS_ORIGINS)
-    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+# Headers the frontend reads from PNG inference responses.
+_EXPOSE_HEADERS = [
+    "X-Request-ID",
+    "Content-Disposition",
+    "x-pf-model",
+    "x-pf-backend",
+    "x-pf-latency-ms",
+    "x-pf-memory-mb",
+    "x-pf-metadata",
+    "x-pf-confidence",
+    "x-pf-method",
+    "x-pf-prompt",
+    "x-pf-segmentation-model",
+    "x-pf-grounding-backend",
+    "x-pf-detection-index",
+    "x-pf-detection-count",
+    "x-pf-selected-label",
+    "x-pf-selected-box-xyxy",
+    "x-pf-detections",
+    "x-pf-instruction",
+    "x-pf-segmentation-ms",
+    "x-pf-inpainting-ms",
+    "x-pf-selection-mode",
+    "x-pf-confidence-tier",
+    "x-pf-segmentation-model",
+    "x-pf-point-xy",
+    "x-pf-ranking",
+]
 
 
 def configure_cors(app) -> None:
+    settings = get_settings()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins(),
+        allow_origins=list(settings.cors_origins),
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["*"],
+        allow_headers=["Content-Type", "Accept", settings.request_id_header],
+        expose_headers=_EXPOSE_HEADERS,
     )
 
 

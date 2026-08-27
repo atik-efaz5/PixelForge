@@ -20,6 +20,7 @@ from apps.backend.persistent_worker import (
     WorkerTimeoutError,
     register_worker_client,
 )
+from apps.backend.settings import get_settings
 from models.config import model_entry, project_root
 from models.errors import ModelInferenceError, ModelLoadError
 from models.types import (
@@ -36,21 +37,20 @@ logger = logging.getLogger(__name__)
 _INPAINT_WORKER = project_root() / "scripts" / "isolated_inpaint_worker.py"
 _MOEBIUS_PERSISTENT_WORKER = project_root() / "scripts" / "moebius_persistent_worker.py"
 _GROUNDING_WORKER = project_root() / "scripts" / "isolated_grounding_worker.py"
-_SUBPROCESS_TIMEOUT_SEC = float(os.environ.get("PIXELFORGE_SUBPROCESS_TIMEOUT", "600"))
+
+
+def _subprocess_timeout_sec() -> float:
+    return get_settings().subprocess_timeout_sec
 
 
 def persistent_moebius_enabled() -> bool:
     """Persistent Moebius worker is on by default; set PIXELFORGE_MOEBIUS_PERSISTENT_WORKER=0 to disable."""
-    return os.environ.get("PIXELFORGE_MOEBIUS_PERSISTENT_WORKER", "1").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
+    return get_settings().persistent_moebius_enabled
 
 
 def _run_isolated(cmd: list[str], *, label: str) -> subprocess.CompletedProcess[str]:
     """Run an isolated worker subprocess with timeout and captured output."""
+    timeout = _subprocess_timeout_sec()
     try:
         return subprocess.run(
             cmd,
@@ -58,12 +58,21 @@ def _run_isolated(cmd: list[str], *, label: str) -> subprocess.CompletedProcess[
             capture_output=True,
             text=True,
             check=False,
-            timeout=_SUBPROCESS_TIMEOUT_SEC,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
         raise ModelInferenceError(
-            f"{label} timed out after {_SUBPROCESS_TIMEOUT_SEC:.0f}s"
+            f"{label} timed out after {timeout:.0f}s"
         ) from exc
+
+
+def _safe_temp_path(parent: Path, name: str) -> Path:
+    """Resolve a child path and reject traversal outside the temp directory."""
+    base = parent.resolve()
+    target = (base / name).resolve()
+    if not str(target).startswith(str(base)):
+        raise ModelInferenceError("Invalid temporary file path.")
+    return target
 
 
 def _env_python(env_name: str, *, override_var: str) -> Path:

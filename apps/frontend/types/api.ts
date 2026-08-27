@@ -8,6 +8,9 @@ export type ModelStatus = "READY" | "UNAVAILABLE" | "LOADING" | "ERROR";
 
 export interface HealthResponse {
   status: string;
+  version?: string;
+  max_upload_bytes?: number;
+  max_concurrent_generations?: number;
 }
 
 export interface ModelInfo {
