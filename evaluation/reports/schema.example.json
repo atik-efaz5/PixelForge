@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PixelForge Evaluation Report",
+  "description": "Machine-readable evaluation report. Metric kinds: MEASURED, COMPUTED, REFERENCE_DEPENDENT, UNAVAILABLE, UNDEFINED.",
+  "type": "object",
+  "required": ["experiment_id", "model", "backend", "operation", "metrics"],
+  "properties": {
+    "experiment_id": { "type": "string" },
+    "model": { "type": "string" },
+    "backend": { "type": "string" },
+    "operation": { "type": "string" },
+    "image_shape": { "type": "array", "items": { "type": "integer" } },
+    "mask_shape": {
+      "type": ["array", "null"],
+      "items": { "type": "integer" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "mask_area": { "type": ["integer", "null"] },
+    "timings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stage", "latency_ms", "kind"],
+        "properties": {
+          "stage": { "type": "string" },
+          "latency_ms": { "type": "number" },
+          "kind": { "const": "MEASURED" }
+        }
+      }
+    },
+    "memory_mb": { "type": ["number", "null"] },
+    "seed": { "type": ["integer", "null"] },
+    "timestamp": { "type": ["number", "null"] },
+    "model_commit": { "type": ["string", "null"] },
+    "environment": { "type": ["string", "null"] },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value", "kind"],
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": ["number", "null"] },
+          "kind": {
+            "enum": [
+              "MEASURED",
+              "COMPUTED",
+              "REFERENCE_DEPENDENT",
+              "UNAVAILABLE",
+              "UNDEFINED"
+            ]
+          },
+          "unit": { "type": ["string", "null"] },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "reproducibility": { "type": "object" },
+    "metadata": { "type": "object" }
+  },
+  "examples": [
+    {
+      "experiment_id": "synthetic-mask-demo",
+      "model": "sam2",
+      "backend": "LOCAL_MPS",
+      "operation": "segment",
+      "image_shape": [64, 64, 3],
+      "mask_shape": [64, 64],
+      "mask_area": 1024,
+      "timings": [
+        { "stage": "segment", "latency_ms": 12.5, "kind": "MEASURED" }
+      ],
+      "memory_mb": null,
+      "seed": 42,
+      "timestamp": 1710000000.0,
+      "model_commit": null,
+      "environment": "pixelforge-sam2-v2",
+      "metrics": [
+        {
+          "name": "mask_area_ratio",
+          "value": 0.25,
+          "kind": "COMPUTED",
+          "unit": "ratio",
+          "note": null
+        },
+        {
+          "name": "iou",
+          "value": 0.82,
+          "kind": "REFERENCE_DEPENDENT",
+          "unit": "ratio",
+          "note": null
+        },
+        {
+          "name": "ssim",
+          "value": null,
+          "kind": "UNAVAILABLE",
+          "unit": "ratio",
+          "note": "SSIM requires scikit-image; not installed in PixelForge evaluation stack"
+        }
+      ],
+      "reproducibility": {
+        "python_version": "3.11.0",
+        "platform": "macOS-14.0-arm64",
+        "architecture": "arm64",
+        "model": "sam2",
+        "model_commit": null,
+        "backend": "LOCAL_MPS",
+        "device": "mps",
+        "environment": "pixelforge-sam2-v2",
+        "seed": 42,
+        "parameters": {},
+        "hashes": {
+          "image_sha256": "abc123",
+          "mask_sha256": "def456",
+          "output_sha256": null
+        }
+      },
+      "metadata": {}
+    }
+  ]
+}
