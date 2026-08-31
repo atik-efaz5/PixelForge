@@ -2,11 +2,11 @@
 
 **Authoritative provenance record for every third-party research repository used by PixelForge.**
 
-STATUS: **PHASE 2 COMPLETE — ALL 7 REPOSITORIES ACQUIRED AND PINNED**
+STATUS: **PHASE 5 COMPLETE FOR CLASSIFIED MODELS — SAM 2 (`LOCAL_MPS` / `PASS`), MOEBIUS (`LOCAL_MPS` / `CONDITIONAL`), PIXELHACKER (`LOCAL_MPS` / `FAIL`, primary `CLOUD_GPU`). FOUR REMAINING REPOSITORIES NOT YET VALIDATED.**
 
 Acquisition date: **2026-08-24**. Every SHA below was read from the local clone via `git rev-parse HEAD` and verified twice. No SHA was inferred, guessed, or taken from a web API.
 
-Machine-readable pins: [`LOCKFILE.md`](LOCKFILE.md). Validation state and intended roles: [`../RESEARCH_STACK.md`](../RESEARCH_STACK.md).
+Machine-readable pins: [`LOCKFILE.md`](LOCKFILE.md). Validation state and intended roles: [`../RESEARCH_STACK.md`](../RESEARCH_STACK.md). Runtime records: [`docs/experiments/SAM2_MPS_VALIDATION.md`](../../docs/experiments/SAM2_MPS_VALIDATION.md), [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](../../docs/experiments/MOEBIUS_MPS_VALIDATION.md), [`docs/experiments/PIXELHACKER_MPS_VALIDATION.md`](../../docs/experiments/PIXELHACKER_MPS_VALIDATION.md).
 
 ---
 
@@ -21,7 +21,7 @@ Machine-readable pins: [`LOCKFILE.md`](LOCKFILE.md). Validation state and intend
 
 ### Phase 2 scope boundary
 
-Phase 2 performed **acquisition and provenance only**. No dependency was installed, no environment created, no checkpoint downloaded, no upstream file modified, no upstream setup script executed, and no submodule initialized. Every `Environment` field therefore reads `TBD — NOT YET CREATED` and every `Validation status` reads `NOT YET VALIDATED`. Device and dependency audits belong to Phase 3 onward.
+Phase 2 performed **acquisition and provenance only**. Phases 3–5 added runtime gates for SAM 2, Moebius, and PixelHacker respectively. Entries below retain acquisition facts; **Validation status** and **Environment** are updated only where a phase gate has completed.
 
 ### Verified: no weights present
 
@@ -40,14 +40,14 @@ A scan of all seven clones for `*.pt`, `*.pth`, `*.ckpt`, `*.safetensors`, `*.bi
 | **Acquisition date** | 2026-08-24T11:38:50+0600 |
 | **License** | **Apache-2.0** — `LICENSE` (201 lines, verbatim Apache License 2.0 header). Additionally `LICENSE_cctorch` = **BSD-3-Clause** covering a vendored third-party component. |
 | **Purpose** | Promptable visual segmentation in images and video. Foundation model extending SAM to video by treating images as single-frame video, with a streaming-memory architecture. PixelForge role: primary segmentation backend — click-based selection, mask proposal, mask refinement, and the refinement stage behind text-guided selection. |
-| **Environment** | TBD — NOT YET CREATED |
-| **Checkpoint source** | Documented in README, `dl.fbaipublicfiles.com`. SAM 2.1 series (`092824/`): `sam2.1_hiera_tiny.pt`, `_small.pt`, `_base_plus.pt`, `_large.pt`. SAM 2.0 series (`072824/`) also listed. Helper script `checkpoints/download_ckpts.sh` present, **not executed**. Phase 3 target: `sam2.1_hiera_tiny.pt` only. |
-| **Validation status** | NOT YET VALIDATED |
+| **Environment** | **`pixelforge-sam2-v2`** — Python 3.11.15, torch 2.13.0 |
+| **Checkpoint source** | Documented in README, `dl.fbaipublicfiles.com`. Phase 3 gate: `sam2.1_hiera_tiny.pt` (148.78 MiB, present under `checkpoints/sam2/`). |
+| **Validation status** | **VALIDATED — `LOCAL_MPS` / `PASS` (2026-08-24)** — [`docs/experiments/SAM2_MPS_VALIDATION.md`](../../docs/experiments/SAM2_MPS_VALIDATION.md) |
 | **Submodules** | None declared (no `.gitmodules`) |
 | **Dependency files** | `pyproject.toml`, `setup.py` |
 | **Disk usage** | 208 MB (`.git`: 145 MB) |
 | **Working tree** | Clean — 0 modified files |
-| **Notes** | HEAD commit subject is *"remove `.pin_memory()` in `obj_pos` of `SAM2Base` to resolve and error in MPS (#495)"* — the pinned commit contains an explicit **Apple MPS fix**. This is a genuinely encouraging signal for Phase 3, but it is **not** evidence that SAM 2 runs on this host; that requires a real inference. HEAD dates to 2024-12-15. A previous deleted working tree reportedly ran SAM 2.1 Hiera-Tiny on MPS; that claim remains **unverified**. |
+| **Notes** | Phase 3 **PASS** on Apple M3 Pro MPS — warm latency 0.1508 s, no CPU fallback. HEAD commit subject is an Apple MPS bug fix (#495); measurement confirms it. |
 
 ## 2. PixelHacker
 
@@ -60,14 +60,14 @@ A scan of all seven clones for `*.pt`, `*.pth`, `*.ckpt`, `*.safetensors`, `*.bi
 | **Acquisition date** | 2026-08-24T11:39:47+0600 |
 | **License** | **Apache-2.0** — `LICENSE` (201 lines, verbatim Apache License 2.0). README badge concurs. |
 | **Purpose** | Image inpainting with structural and semantic consistency. Reports SOTA on Places2, CelebA-HQ and FFHQ. Authors: Huazhong University of Science and Technology + VIVO AI Lab (arXiv 2504.20438). PixelForge role: candidate inpainting backend, **Priority B**; project namesake. |
-| **Environment** | TBD — NOT YET CREATED |
-| **Checkpoint source** | Hugging Face `hustvl/PixelHacker` — subtrees `pretrained/`, `ft_places2/`, `ft_celebahq/`, `ft_ffhq/`, and `vae/`. No download script in repo. **Nothing downloaded.** |
-| **Validation status** | NOT YET VALIDATED |
+| **Environment** | **not created** — Phase 5 gate used host MPS probe only; no `pixelforge-pixelhacker` |
+| **Checkpoint source** | Hugging Face `hustvl/PixelHacker` — `ft_places2` UNet + `vae/`. **UNet not downloaded.** VAE copy may exist under `checkpoints/moebius/vae/` from Phase 4. |
+| **Validation status** | **CLASSIFIED — `LOCAL_MPS` / `FAIL`, primary `CLOUD_GPU` (2026-08-31)** — [`docs/experiments/PIXELHACKER_MPS_VALIDATION.md`](../../docs/experiments/PIXELHACKER_MPS_VALIDATION.md), [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](../../docs/experiments/PIXELHACKER_FEASIBILITY.md) |
 | **Submodules** | None declared |
 | **Dependency files** | `requirements.txt` |
 | **Disk usage** | 223 MB (`.git`: 192 MB) |
 | **Working tree** | Clean — 0 modified files |
-| **Notes** | HEAD dates 2026-06-20 (recent, actively maintained). A Hugging Face cache entry surviving the earlier project deletion records weights-repo revision `012fd343158936a265b8a0ee38a791a7a2841f45` — that is an **HF weights revision, NOT this GitHub source commit**, and the two must never be conflated. Phase 5 determines local-vs-cloud; treat as likely `CLOUD_GPU` until proven otherwise. Note PixelHacker is the **teacher model** Moebius distills from. |
+| **Notes** | Phase 5 gate: `fla`/GLA blocks import on Apple Silicon; upstream device line is CUDA-or-CPU only. Cloud CUDA path is source-feasible but **not runtime-validated**. Teacher model for Moebius distillation. HF weights revision `012fd343…` is not this GitHub SHA. |
 
 ## 3. Moebius
 
@@ -80,14 +80,14 @@ A scan of all seven clones for `*.pt`, `*.pth`, `*.ckpt`, `*.safetensors`, `*.bi
 | **Acquisition date** | 2026-08-24T11:41:27+0600 |
 | **License** | **Apache-2.0 — covering both code and pretrained weights.** `LICENSE` (199 lines, verbatim Apache 2.0). README §License states explicitly: *"Both the code and the pretrained model weights of Moebius are released under the Apache License 2.0 … Commercial use of the weights and the images produced with them is permitted."* |
 | **Purpose** | 0.2B-parameter lightweight image inpainting framework claiming 10B-level performance (ECCV'26, arXiv 2606.19195). Uses adaptive multi-granularity distillation transferring representational capacity from PixelHacker (teacher) within latent space. PixelForge role: candidate inpainting backend, **Priority A** — first to be evaluated for local MPS. |
-| **Environment** | TBD — NOT YET CREATED |
-| **Checkpoint source** | Hugging Face `hustvl/Moebius` — subtrees `pretrained/`, `ft_places2/`, `ft_celebahq/`, `ft_ffhq/`. **Additionally requires a VAE from a different repo:** `hustvl/PixelHacker/tree/main/vae`. Expected layout `./weight/vae` and `./weight/Moebius`. **Nothing downloaded.** |
-| **Validation status** | NOT YET VALIDATED |
+| **Environment** | **`pixelforge-moebius`** — Python 3.11.15, torch 2.13.0, diffusers 0.40.0 |
+| **Checkpoint source** | Hugging Face `hustvl/Moebius` `ft_places2` + VAE from `hustvl/PixelHacker/vae`. Present under `checkpoints/moebius/`. |
+| **Validation status** | **VALIDATED — `LOCAL_MPS` / `CONDITIONAL` (2026-08-24)** — [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](../../docs/experiments/MOEBIUS_MPS_VALIDATION.md) |
 | **Submodules** | None declared |
 | **Dependency files** | `requirements.txt` |
 | **Disk usage** | 165 MB (`.git`: 113 MB) |
 | **Working tree** | Clean — 0 modified files |
-| **Notes** | HEAD commit is literally *"Add explicit license statement covering code and pretrained weights"* (2026-08-12) — the clearest weight-licensing position of all seven repos, and the only one explicitly permitting commercial weight use. **0.2B parameters makes this by far the most plausible inpainting backend for an 18 GB unified-memory host**, consistent with its Priority A ranking. Its VAE dependency on the PixelHacker HF repo means Phase 4 cannot proceed on Moebius weights alone. |
+| **Notes** | Phase 4 **CONDITIONAL** on Apple M3 Pro MPS — warm inpainting 21.9 s @ 512², student-only import surrogate required. Explicit Apache-2.0 license covering code and weights. |
 
 ## 4. BrushNet
 

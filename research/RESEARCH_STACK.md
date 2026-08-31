@@ -113,7 +113,7 @@ Full record: [`docs/experiments/SAM2_MPS_VALIDATION.md`](../docs/experiments/SAM
 
 No cloud latency, no VRAM measurement, no successful PixelHacker image.
 
-Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](../docs/experiments/PIXELHACKER_FEASIBILITY.md).
+Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](../docs/experiments/PIXELHACKER_FEASIBILITY.md) (source audit) and [`docs/experiments/PIXELHACKER_MPS_VALIDATION.md`](../docs/experiments/PIXELHACKER_MPS_VALIDATION.md) (runtime gate, `FAIL`).
 
 ## 3. Moebius
 

@@ -6,7 +6,7 @@ The first isolated environment has been created and validated: **`pixelforge-sam
 
 A second environment, **`pixelforge-moebius`**, has been created for Phase 4, passes the same editable-install audit, and has now **executed real generative inpainting on MPS** — verdict **`CONDITIONAL`**, all 11 gate checks passed. It is `CONDITIONAL` rather than `PASS` because student inference on Apple Silicon requires a PixelForge-side import-isolation workaround that does **not** alter the research method. Details in §12 and in [`docs/experiments/MOEBIUS_MPS_VALIDATION.md`](experiments/MOEBIUS_MPS_VALIDATION.md).
 
-Phase 5 classified PixelHacker from the pinned source. **No third environment was created, no PixelHacker UNet weights were downloaded, and no cloud GPU was deployed.** Placement is `CLOUD_GPU`; `LOCAL_MPS` is `FAIL`. Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](experiments/PIXELHACKER_FEASIBILITY.md) and §13.
+Phase 5 classified PixelHacker from the pinned source and recorded a runtime gate (`LOCAL_MPS: FAIL`). **No third environment was created, no PixelHacker UNet weights were downloaded, and no cloud GPU was deployed.** Placement is `CLOUD_GPU`. Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](experiments/PIXELHACKER_FEASIBILITY.md), [`docs/experiments/PIXELHACKER_MPS_VALIDATION.md`](experiments/PIXELHACKER_MPS_VALIDATION.md), harness [`tests/smoke/test_pixelhacker_mps.py`](../tests/smoke/test_pixelhacker_mps.py), and §13.
 
 Sections 1–10 describe the rules that govern environment creation. Sections 11–12 record what was actually measured, per model. Section 13 records a **source classification**, not a runtime measurement.
 
@@ -395,7 +395,7 @@ float32, and it is **upstream's own inference default**, not a PixelForge conser
 
 Phase 5 is **complete as a source classification**, not as a runtime gate. **No environment of record exists for PixelHacker.** Nothing in this section is a latency or VRAM measurement from a PixelHacker process.
 
-Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](experiments/PIXELHACKER_FEASIBILITY.md).
+Full record: [`docs/experiments/PIXELHACKER_FEASIBILITY.md`](experiments/PIXELHACKER_FEASIBILITY.md) and [`docs/experiments/PIXELHACKER_MPS_VALIDATION.md`](experiments/PIXELHACKER_MPS_VALIDATION.md). Harness: [`tests/smoke/test_pixelhacker_mps.py`](../tests/smoke/test_pixelhacker_mps.py).
 
 | Property | Value |
 |---|---|
