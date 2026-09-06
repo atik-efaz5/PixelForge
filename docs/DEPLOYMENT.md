@@ -475,7 +475,13 @@ Restart backend after changing CORS.
 
 ### Port already in use
 
+PixelForge startup (`./scripts/start_backend.sh`) checks that port **8000** is either
+free or already serving PixelForge `/health` (version `0.1.0` with `max_upload_bytes`).
+If another app (e.g. **Floodlens**) owns the port, startup fails with a clear error —
+run the other app on a different port (e.g. **8010** for Floodlens).
+
 ```bash
+./scripts/check_pixelforge_port.sh   # 0=free, 2=PixelForge up, 1=wrong app
 lsof -i :8000
 lsof -i :3000
 ./scripts/stop_local.sh
@@ -568,6 +574,36 @@ Reasons:
 If Linux/CUDA deployment is needed in the future, it requires a separate
 validation phase and dedicated container spec. Do not assume the current
 Docker-less packaging is a gap for the M3 Pro local target.
+
+---
+
+## 16. Public demo (Vercel + Mac tunnel)
+
+The live UI at [frontend-mu-two-wzuqjziue7.vercel.app](https://frontend-mu-two-wzuqjziue7.vercel.app)
+runs on Vercel. **SAM 2 / Moebius still run on your Mac.** Visitors need a public HTTPS
+API that tunnels to `http://127.0.0.1:8000`.
+
+### Quick start (ephemeral tunnel)
+
+```bash
+./scripts/start_public_demo.sh
+# Copy the https://*.trycloudflare.com URL into Vercel NEXT_PUBLIC_API_BASE_URL
+# Then: ./scripts/deploy_vercel_prod.sh
+```
+
+### Stable hostname (recommended)
+
+```bash
+./scripts/setup_named_tunnel.sh          # one-time Cloudflare login + DNS
+cp configs/tunnel.env.example configs/tunnel.env   # add CLOUDFLARE_TUNNEL_TOKEN or config path
+./scripts/deploy_vercel_prod.sh          # bakes NEXT_PUBLIC_API_BASE_URL into production build
+./scripts/install_public_demo_launchd.sh # backend + tunnel at login (macOS)
+```
+
+### Verify
+
+1. DevTools → Network: API calls go to your tunnel hostname, **not** `127.0.0.1:8000`.
+2. From another device: open the Vercel URL → upload → select → fill.
 
 ---
 

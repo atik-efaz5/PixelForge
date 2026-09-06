@@ -1,0 +1,12 @@
+# Named Cloudflare tunnel for PixelForge (stable public API hostname).
+#
+# One-time setup: ./scripts/setup_named_tunnel.sh
+# Or use a Zero Trust install token via configs/tunnel.env (CLOUDFLARE_TUNNEL_TOKEN).
+
+tunnel: pixelforge
+credentials-file: /Users/YOU/.cloudflared/TUNNEL_ID.json
+
+ingress:
+  - hostname: api.YOUR_DOMAIN.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404
