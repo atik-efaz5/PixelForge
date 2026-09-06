@@ -28,6 +28,9 @@ env/
 .env
 .env.*
 !.env.example
+configs/tunnel.env
+configs/cloudflared/config.yml
+configs/cloudflared/*.json
 
 # ---------- Model weights and checkpoints ----------
 # Weights are never committed. They are acquired by scripts and

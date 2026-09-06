@@ -1,0 +1,18 @@
+# Named Cloudflare tunnel for PixelForge (stable public API hostname).
+#
+# One-time setup:
+#   1. cloudflared tunnel login
+#   2. cloudflared tunnel create pixelforge
+#   3. Copy this file to ~/.cloudflared/config.yml (or configs/cloudflared/config.yml)
+#   4. Replace TUNNEL_ID and hostname with values from: cloudflared tunnel list
+#   5. Add a DNS CNAME in Cloudflare: api -> TUNNEL_ID.cfargotunnel.com
+#
+# Or use a Zero Trust tunnel token instead (see scripts/setup_named_tunnel.sh).
+
+tunnel: pixelforge
+credentials-file: /Users/YOU/.cloudflared/TUNNEL_ID.json
+
+ingress:
+  - hostname: api.YOUR_DOMAIN.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404

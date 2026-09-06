@@ -36,6 +36,15 @@ fi
 HOST="${PIXELFORGE_API_HOST:-127.0.0.1}"
 PORT="${PIXELFORGE_API_PORT:-8000}"
 
+if ! "$ROOT/scripts/check_pixelforge_port.sh"; then
+  PORT_STATUS=$?
+  if [[ "$PORT_STATUS" -eq 2 ]]; then
+    echo "PixelForge is already running on http://${HOST}:${PORT}" >&2
+    exit 0
+  fi
+  exit 1
+fi
+
 export PYTHONPATH="$ROOT/.e2e_deps:$ROOT"
 export PIXELFORGE_ROOT="${PIXELFORGE_ROOT:-$ROOT}"
 
