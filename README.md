@@ -4,7 +4,7 @@
 
 **Live demo (frontend):** [https://frontend-mu-two-wzuqjziue7.vercel.app](https://frontend-mu-two-wzuqjziue7.vercel.app)
 
-The public UI is hosted on Vercel. Editing still runs on the operator’s Mac (SAM 2 / Moebius via a Cloudflare tunnel to the local FastAPI backend). See [`configs/tunnel.env.example`](configs/tunnel.env.example) to run the demo stack.
+The public UI is hosted on Vercel. Editing still runs on the operator’s Mac (SAM 2 / Moebius via a Cloudflare tunnel to the local FastAPI backend). See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §16 and [`configs/tunnel.env.example`](configs/tunnel.env.example).
 
 PixelForge combines promptable segmentation, generative inpainting, structural and semantic consistency, model adapters and routing, quantitative evaluation, and a web interface into one reproducible research platform.
 
