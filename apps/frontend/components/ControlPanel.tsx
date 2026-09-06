@@ -236,7 +236,7 @@ export function ControlPanel({
           <button
             type="button"
             aria-pressed={tool === "select"}
-            disabled={busy || selectionMode === "text"}
+            disabled={busy}
             aria-label="Click to select object on image"
             onClick={() => onToolChange("select")}
             style={toolButtonStyle(tool === "select")}

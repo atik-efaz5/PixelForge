@@ -42,6 +42,7 @@ class TestSettings(unittest.TestCase):
             settings = get_settings()
         self.assertEqual(settings.max_upload_bytes, 25 * 1024 * 1024)
         self.assertEqual(settings.max_concurrent_generations, 1)
+        self.assertEqual(settings.cors_origin_regex, r"https://.*\.vercel\.app")
 
     def test_settings_env_override(self) -> None:
         with mock.patch.dict(

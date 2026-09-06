@@ -53,6 +53,7 @@ class Settings:
     api_host: str
     api_port: int
     cors_origins: tuple[str, ...]
+    cors_origin_regex: str
     request_id_header: str
 
     # Upload / image bounds
@@ -85,6 +86,10 @@ def get_settings() -> Settings:
         api_host=os.environ.get("PIXELFORGE_API_HOST", "127.0.0.1").strip(),
         api_port=_env_int("PIXELFORGE_API_PORT", 8000),
         cors_origins=_env_csv("PIXELFORGE_CORS_ORIGINS", _DEFAULT_CORS_ORIGINS),
+        cors_origin_regex=os.environ.get(
+            "PIXELFORGE_CORS_ORIGIN_REGEX",
+            r"https://.*\.vercel\.app",
+        ).strip(),
         request_id_header=os.environ.get(
             "PIXELFORGE_REQUEST_ID_HEADER", "X-Request-ID"
         ).strip()

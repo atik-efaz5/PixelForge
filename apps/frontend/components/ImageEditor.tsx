@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   editByInstruction,
   editingCapabilities,
+  health,
   inpaint,
   routing,
   segment,
@@ -525,11 +526,12 @@ export function ImageEditor() {
 
   const handlePointSelect = useCallback(
     async (x: number, y: number) => {
-      if (!imageFile || !imageSize || busy || selectionMode === "text") return;
+      if (!imageFile || !imageSize || busy) return;
       setStatus("segmenting");
       clearError();
       try {
-        if (selectionMode === "point") {
+        const clickMode = selectionMode === "text" ? "smart" : selectionMode;
+        if (clickMode === "point") {
           const { blob, metadata } = await segment(imageFile, x, y);
           setSelectionLine(
             formatSelectionLine({
@@ -541,13 +543,13 @@ export function ImageEditor() {
           await applyMaskFromBlob(blob, { method: "point" });
         } else {
           const { blob, metadata } = await selectSmart(imageFile, {
-            selectionMode,
+            selectionMode: clickMode,
             x,
             y,
           });
           setSelectionLine(
             formatSmartSelectionLine({
-              selectionMode,
+              selectionMode: clickMode,
               method: metadata.method as "point" | "text",
               confidenceTier: metadata.confidence_tier,
             })
@@ -980,21 +982,24 @@ export function ImageEditor() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([routing(), editingCapabilities()])
-      .then(([routingData, capabilities]) => {
+    Promise.all([health(), routing(), editingCapabilities()])
+      .then(([, routingData, capabilities]) => {
         if (!cancelled) {
           setInstructionEditAvailable(
             isInstructionEditAvailable(routingData, capabilities)
           );
         }
       })
-      .catch(() => {
-        if (!cancelled) setInstructionEditAvailable(false);
+      .catch((err) => {
+        if (!cancelled) {
+          setInstructionEditAvailable(false);
+          setError(err);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setError]);
 
   useEffect(() => {
     if (mask && imageSize) {

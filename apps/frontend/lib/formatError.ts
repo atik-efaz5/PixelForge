@@ -73,6 +73,19 @@ export function toUserFacingError(raw: unknown): UserFacingError {
       recovery: "Check that local models are installed, or choose a different backend.",
     };
   }
+  if (
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("load failed") ||
+    lower.includes("err_connection") ||
+    lower.includes("mixed content")
+  ) {
+    return {
+      message: "Cannot reach the PixelForge API from this page.",
+      recovery:
+        "The hosted UI needs the public API URL (Cloudflare tunnel), not localhost. Keep the Mac backend and tunnel running, then retry.",
+    };
+  }
   if (lower.includes("failed") || lower.includes("timeout")) {
     return {
       message,

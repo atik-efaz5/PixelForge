@@ -32,6 +32,12 @@ describe("toUserFacingError", () => {
     expect(err.recovery).not.toMatch(/refine the mask/i);
   });
 
+  it("explains when the hosted UI cannot reach the API", () => {
+    const err = toUserFacingError(new Error("Failed to fetch"));
+    expect(err.message).toMatch(/cannot reach/i);
+    expect(err.recovery).toMatch(/tunnel/i);
+  });
+
   it("keeps generic unavailable recovery for other backends", () => {
     const err = toUserFacingError(new Error("SAM 2 is not available."));
     expect(err.recovery).toMatch(/local models/i);
