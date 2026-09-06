@@ -21,8 +21,52 @@ import type { EditingCapabilitiesResponse } from "@/lib/editorCapabilities";
 const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_REQUEST_TIMEOUT_MS = 600_000;
 
-export function apiBaseUrl(): string {
+let resolvedBaseUrl: string | null = null;
+let resolvePromise: Promise<string> | null = null;
+
+function buildTimeBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || DEFAULT_BASE_URL;
+}
+
+function isLocalhostUrl(url: string): boolean {
+  return /127\.0\.0\.1|localhost/i.test(url);
+}
+
+/** Resolve API base URL (fetches /api/config on Vercel when build still points at localhost). */
+export async function resolveApiBaseUrl(): Promise<string> {
+  if (resolvedBaseUrl) return resolvedBaseUrl;
+  if (!resolvePromise) {
+    resolvePromise = (async () => {
+      const baked = buildTimeBaseUrl();
+      if (typeof window !== "undefined" && isLocalhostUrl(baked)) {
+        try {
+          const response = await fetch("/api/config", { cache: "no-store" });
+          if (response.ok) {
+            const body = (await response.json()) as { apiBaseUrl?: string };
+            const runtime = body.apiBaseUrl?.trim();
+            if (runtime && !isLocalhostUrl(runtime)) {
+              resolvedBaseUrl = runtime.replace(/\/$/, "");
+              return resolvedBaseUrl;
+            }
+          }
+        } catch {
+          /* use baked URL */
+        }
+      }
+      resolvedBaseUrl = baked.replace(/\/$/, "");
+      return resolvedBaseUrl;
+    })();
+  }
+  return resolvePromise;
+}
+
+export function apiBaseUrl(): string {
+  return resolvedBaseUrl ?? buildTimeBaseUrl();
+}
+
+async function apiUrl(path: string): Promise<string> {
+  const base = await resolveApiBaseUrl();
+  return `${base}${path}`;
 }
 
 function pfHeaderKey(field: string): string {
@@ -222,7 +266,7 @@ export type InpaintResponse =
   | { mode: "candidates"; response: InpaintCandidatesResponse };
 
 export async function health(): Promise<HealthResponse> {
-  const response = await fetchWithTimeout(`${apiBaseUrl()}/health`);
+  const response = await fetchWithTimeout(`${await apiUrl("/health")}`);
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
@@ -230,7 +274,7 @@ export async function health(): Promise<HealthResponse> {
 }
 
 export async function models(): Promise<ModelsResponse> {
-  const response = await fetch(`${apiBaseUrl()}/models`);
+  const response = await fetch(`${await apiUrl("/models")}`);
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
@@ -238,7 +282,7 @@ export async function models(): Promise<ModelsResponse> {
 }
 
 export async function routing(): Promise<RoutingResponse> {
-  const response = await fetch(`${apiBaseUrl()}/routing`);
+  const response = await fetch(`${await apiUrl("/routing")}`);
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
@@ -246,7 +290,7 @@ export async function routing(): Promise<RoutingResponse> {
 }
 
 export async function editingCapabilities(): Promise<EditingCapabilitiesResponse> {
-  const response = await fetch(`${apiBaseUrl()}/capabilities`);
+  const response = await fetch(`${await apiUrl("/capabilities")}`);
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
@@ -263,7 +307,7 @@ export async function segment(
   form.append("x", String(x));
   form.append("y", String(y));
 
-  const response = await fetchWithTimeout(`${apiBaseUrl()}/segment`, {
+  const response = await fetchWithTimeout(`${await apiUrl("/segment")}`, {
     method: "POST",
     body: form,
   });
@@ -290,7 +334,7 @@ export async function inpaint(
   const candidateCount = options?.candidateCount ?? 1;
   form.append("candidate_count", String(candidateCount));
 
-  const response = await fetchWithTimeout(`${apiBaseUrl()}/inpaint`, {
+  const response = await fetchWithTimeout(`${await apiUrl("/inpaint")}`, {
     method: "POST",
     body: form,
   });
@@ -323,7 +367,7 @@ export async function selectByText(
   form.append("detection_index", String(detectionIndex));
   form.append("grounding_backend", "grounding_dino");
 
-  const response = await fetchWithTimeout(`${apiBaseUrl()}/select-by-text`, {
+  const response = await fetchWithTimeout(`${await apiUrl("/select-by-text")}`, {
     method: "POST",
     body: form,
   });
@@ -365,7 +409,7 @@ export async function selectSmart(
   }
   form.append("grounding_backend", "grounding_dino");
 
-  const response = await fetchWithTimeout(`${apiBaseUrl()}/select-smart`, {
+  const response = await fetchWithTimeout(`${await apiUrl("/select-smart")}`, {
     method: "POST",
     body: form,
   });
@@ -408,7 +452,7 @@ export async function removeObject(
     void mask;
   }
 
-  const response = await fetchWithTimeout(`${apiBaseUrl()}/remove-object`, {
+  const response = await fetchWithTimeout(`${await apiUrl("/remove-object")}`, {
     method: "POST",
     body: form,
   });
@@ -434,7 +478,7 @@ export async function editByInstruction(
   form.append("instruction", instruction);
   form.append("backend", backend);
 
-  const response = await fetchWithTimeout(`${apiBaseUrl()}/edit-by-instruction`, {
+  const response = await fetchWithTimeout(`${await apiUrl("/edit-by-instruction")}`, {
     method: "POST",
     body: form,
   });

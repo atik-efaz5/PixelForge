@@ -605,6 +605,16 @@ cp configs/tunnel.env.example configs/tunnel.env   # add CLOUDFLARE_TUNNEL_TOKEN
 1. DevTools → Network: API calls go to your tunnel hostname, **not** `127.0.0.1:8000`.
 2. From another device: open the Vercel URL → upload → select → fill.
 
+### Vercel runtime API URL (no client rebuild)
+
+If production JS was built with `127.0.0.1:8000`, set a **server** env var in the Vercel project:
+
+```
+PIXELFORGE_API_BASE_URL=https://your-tunnel-host.example.com
+```
+
+Redeploy once so `/api/config` exists; after that you can change the tunnel URL in Vercel env without rebuilding the client bundle.
+
 ---
 
 ## Quick reference
