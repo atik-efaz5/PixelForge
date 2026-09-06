@@ -1,6 +1,7 @@
 "use client";
 
 import type { DetectionInfo, EditorTool, InpaintBackend, SelectionMode } from "@/types/api";
+import { canSubmitFindObject, selectionModeAfterTyping } from "@/lib/selectObject";
 
 interface ControlPanelProps {
   hasImage: boolean;
@@ -46,8 +47,12 @@ interface ControlPanelProps {
   onDetectionIndexChange: (index: number) => void;
   editInstruction: string;
   canApplyInstruction: boolean;
+  instructionEditAvailable: boolean;
+  canLocalRemove: boolean;
+  emphasizeGenerate: boolean;
   onEditInstructionChange: (value: string) => void;
   onApplyInstruction: () => void;
+  onLocalRemove: () => void;
 }
 
 export function ControlPanel({
@@ -94,8 +99,12 @@ export function ControlPanel({
   onDetectionIndexChange,
   editInstruction,
   canApplyInstruction,
+  instructionEditAvailable,
+  canLocalRemove,
+  emphasizeGenerate,
   onEditInstructionChange,
   onApplyInstruction,
+  onLocalRemove,
 }: ControlPanelProps) {
   return (
     <aside
@@ -168,16 +177,39 @@ export function ControlPanel({
           <input
             type="text"
             value={textPrompt}
-            disabled={busy || selectionMode === "point"}
+            disabled={busy}
             placeholder="dog, red car, person..."
-            onChange={(event) => onTextPromptChange(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              onTextPromptChange(value);
+              const nextMode = selectionModeAfterTyping(selectionMode, value);
+              if (nextMode !== selectionMode) {
+                onSelectionModeChange(nextMode);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter") return;
+              event.preventDefault();
+              if (!canSubmitFindObject(busy, textPrompt, hasImage)) return;
+              const nextMode = selectionModeAfterTyping(selectionMode, textPrompt);
+              if (nextMode !== selectionMode) {
+                onSelectionModeChange(nextMode);
+              }
+              onFindObject();
+            }}
             style={{ width: "100%", marginTop: 6, padding: "8px 10px" }}
           />
         </label>
         <button
           type="button"
-          disabled={busy || !textPrompt.trim() || selectionMode === "point"}
-          onClick={onFindObject}
+          disabled={!canSubmitFindObject(busy, textPrompt, hasImage)}
+          onClick={() => {
+            const nextMode = selectionModeAfterTyping(selectionMode, textPrompt);
+            if (nextMode !== selectionMode) {
+              onSelectionModeChange(nextMode);
+            }
+            onFindObject();
+          }}
           aria-label="Find object by text description"
           style={{ ...secondaryButtonStyle, marginTop: 8 }}
         >
@@ -309,7 +341,8 @@ export function ControlPanel({
           />
         </label>
         <p style={hintStyle}>
-          Feather affects overlay and preview only. Inpainting still uses a hard bool mask.
+          Expand / shrink change the mask overlay only — they do not delete the
+          object. Feather is a preview. Use Localized Fill to remove the region.
         </p>
         <div style={buttonRowStyle}>
           <button type="button" disabled={busy || !canUndo} onClick={onUndo} style={toolButtonStyle(false)}>
@@ -391,16 +424,29 @@ export function ControlPanel({
             }}
           />
         </label>
-        <button
-          type="button"
-          disabled={busy || !canApplyInstruction}
-          onClick={onApplyInstruction}
-          style={{ ...secondaryButtonStyle, marginTop: 8, fontWeight: 600 }}
-        >
-          {busy ? "Applying…" : "Apply Instruction"}
-        </button>
+        {instructionEditAvailable ? (
+          <button
+            type="button"
+            disabled={busy || !canApplyInstruction}
+            onClick={onApplyInstruction}
+            style={{ ...secondaryButtonStyle, marginTop: 8, fontWeight: 600 }}
+          >
+            {busy ? "Applying…" : "Apply Instruction"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={busy || !canLocalRemove}
+            onClick={onLocalRemove}
+            style={{ ...primaryButtonStyle, marginTop: 8, fontWeight: 600 }}
+          >
+            Remove with local fill (Moebius)
+          </button>
+        )}
         <p style={hintStyle}>
-          Global full-frame edit via InstructPix2Pix (cloud). Does not use the mask above.
+          {instructionEditAvailable
+            ? "Global full-frame edit via InstructPix2Pix (cloud). Does not use the mask above."
+            : "Cloud InstructPix2Pix is not configured. Object removal uses the current mask, or selects from this instruction, then Moebius fill."}
         </p>
       </section>
 
@@ -419,14 +465,19 @@ export function ControlPanel({
           type="button"
           disabled={busy || !canGenerate}
           onClick={onGenerate}
-          style={primaryButtonStyle}
+          style={{
+            ...primaryButtonStyle,
+            boxShadow: emphasizeGenerate ? "0 0 0 2px #38bdf8" : undefined,
+          }}
           aria-busy={busy}
           aria-label="Fill selected region with Moebius inpainting"
         >
           {busy ? "Generating…" : "Fill selected region"}
         </button>
         <p style={hintStyle}>
-          Sends the current edited bool mask to Moebius. Original image is never modified.
+          {emphasizeGenerate
+            ? "Next step: fill the masked region with Moebius to remove or replace it."
+            : "Sends the current edited bool mask to Moebius. Original image is never modified."}
         </p>
       </section>
     </aside>

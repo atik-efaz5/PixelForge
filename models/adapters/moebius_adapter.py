@@ -25,6 +25,11 @@ from models.adapters._runtime import (
 from models.adapters.base import InpaintingAdapter
 from models.config import model_entry, resolve_path
 from models.errors import ModelInferenceError, ModelLoadError, ModelUnavailableError
+from models.moebius_geometry import (
+    prepare_moebius_work,
+    restore_moebius_result,
+    try_uniform_neighbor_fill,
+)
 from models.types import (
     BackendType,
     InpaintParams,
@@ -238,6 +243,17 @@ class MoebiusAdapter(InpaintingAdapter):
     ) -> InpaintingResult:
         image = validate_image(image)
         mask = validate_mask(mask, image=image)
+        t0 = time.perf_counter()
+        solid = try_uniform_neighbor_fill(image, mask)
+        if solid is not None:
+            return InpaintingResult(
+                result=solid,
+                latency_ms=round((time.perf_counter() - t0) * 1000.0, 3),
+                memory_mb=None,
+                model=self.model_name,
+                backend=BackendType.CPU,
+                metadata={"solid_fill": True, "reason": "uniform_neighbors"},
+            )
         if not self._loaded:
             self.load()
         if self._pipe is None:
@@ -255,8 +271,11 @@ class MoebiusAdapter(InpaintingAdapter):
         )
         image_size = p.image_size if p.image_size is not None else _DEFAULT_SIZE
 
-        pil_img = image_to_pil_rgb(image)
-        pil_mask = mask_to_pil_l(mask)
+        work_image, work_mask, geom = prepare_moebius_work(
+            image, mask, size=image_size
+        )
+        pil_img = image_to_pil_rgb(work_image)
+        pil_mask = mask_to_pil_l(work_mask)
         if p.seed is not None:
             import random
 
@@ -287,7 +306,9 @@ class MoebiusAdapter(InpaintingAdapter):
             raise ModelInferenceError("Moebius inference failed.") from exc
 
         latency_ms = (time.perf_counter() - t0) * 1000.0
-        result = pil_rgb_to_array(out_list[0])
+        result = restore_moebius_result(
+            image, mask, pil_rgb_to_array(out_list[0]), geom
+        )
         return InpaintingResult(
             result=result,
             latency_ms=round(latency_ms, 3),
@@ -301,6 +322,10 @@ class MoebiusAdapter(InpaintingAdapter):
                 "paste": paste,
                 "noise_offset": noise_offset,
                 "image_size": image_size,
+                "orig_hw": [geom.orig_h, geom.orig_w],
+                "moebius_crop_xy": [geom.crop_x0, geom.crop_y0],
+                "moebius_crop_hw": [geom.crop_h, geom.crop_w],
+                "moebius_work_skipped": geom.skipped,
                 "seed": p.seed,
                 "device": "mps",
                 "import_isolation": True,

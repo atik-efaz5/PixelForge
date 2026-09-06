@@ -47,6 +47,15 @@ def _emit(payload: dict) -> None:
     sys.stdout.flush()
 
 
+def _error_message(exc: BaseException) -> str:
+    """Surface exception type and cause so OOM vs shape is visible to the API."""
+    message = f"{type(exc).__name__}: {exc}"
+    cause = exc.__cause__
+    if cause is not None:
+        message = f"{message} caused by {type(cause).__name__}: {cause}"
+    return message
+
+
 @contextmanager
 def _upstream_stdout_to_stderr():
     """Keep worker protocol lines on stdout; send upstream prints to stderr."""
@@ -138,7 +147,7 @@ def main() -> int:
                 payload = _inpaint(adapter, image_path, mask_path, out_path)
                 _emit({"id": request_id, "ok": True, **payload})
             except Exception as exc:
-                _emit({"id": request_id, "ok": False, "error": str(exc)})
+                _emit({"id": request_id, "ok": False, "error": _error_message(exc)})
             continue
 
         _emit({"id": request_id, "ok": False, "error": f"unknown cmd: {cmd}"})

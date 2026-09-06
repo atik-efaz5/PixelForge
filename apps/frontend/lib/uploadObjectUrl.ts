@@ -1,7 +1,13 @@
 /**
  * Tracks the single active uploaded-image object URL for an editor session.
  * Only this registry may revoke the source upload URL.
+ *
+ * Revocation is deferred to explicit session end (new session / replace upload)
+ * or page unload — not React effect cleanup (Strict Mode safe).
  */
+
+let pageUnloadHookInstalled = false;
+const registriesPendingPageUnload = new Set<UploadObjectUrlRegistry>();
 
 export class UploadObjectUrlRegistry {
   private active: string | null = null;
@@ -12,14 +18,17 @@ export class UploadObjectUrlRegistry {
       URL.revokeObjectURL(this.active);
     }
     this.active = next;
+    ensurePageUnloadHook();
+    registriesPendingPageUnload.add(this);
     return next;
   }
 
-  /** Release the active upload URL (new session or unmount). */
+  /** Release the active upload URL (new session or page unload). */
   release(): void {
     if (!this.active) return;
     URL.revokeObjectURL(this.active);
     this.active = null;
+    registriesPendingPageUnload.delete(this);
   }
 
   current(): string | null {
@@ -35,6 +44,24 @@ export class UploadObjectUrlRegistry {
     if (!url || url === this.active) return;
     URL.revokeObjectURL(url);
   }
+}
+
+function ensurePageUnloadHook(): void {
+  if (pageUnloadHookInstalled || typeof window === "undefined") return;
+  pageUnloadHookInstalled = true;
+  const releaseAll = () => {
+    for (const registry of registriesPendingPageUnload) {
+      registry.release();
+    }
+    registriesPendingPageUnload.clear();
+  };
+  window.addEventListener("pagehide", releaseAll);
+}
+
+/** Test helper: reset module-level page-unload hook state. */
+export function resetUploadObjectUrlPageUnloadHookForTests(): void {
+  pageUnloadHookInstalled = false;
+  registriesPendingPageUnload.clear();
 }
 
 export function isObjectUrl(url: string | null | undefined): url is string {

@@ -172,7 +172,12 @@ def inpaint_via_isolated_env(
     if persistent_moebius_enabled() and _MOEBIUS_PERSISTENT_WORKER.is_file():
         try:
             return inpaint_via_persistent_worker(image, mask, params=params)
-        except (ModelLoadError, WorkerCrashedError, WorkerTimeoutError) as exc:
+        except (
+            ModelLoadError,
+            ModelInferenceError,
+            WorkerCrashedError,
+            WorkerTimeoutError,
+        ) as exc:
             logger.warning(
                 "persistent Moebius worker failed; falling back to one-shot subprocess: %s",
                 exc,

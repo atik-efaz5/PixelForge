@@ -16,6 +16,7 @@ import type {
   SegmentMetadata,
   SelectionMode,
 } from "@/types/api";
+import type { EditingCapabilitiesResponse } from "@/lib/editorCapabilities";
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_REQUEST_TIMEOUT_MS = 600_000;
@@ -242,6 +243,14 @@ export async function routing(): Promise<RoutingResponse> {
     throw new Error(await parseErrorMessage(response));
   }
   return (await response.json()) as RoutingResponse;
+}
+
+export async function editingCapabilities(): Promise<EditingCapabilitiesResponse> {
+  const response = await fetch(`${apiBaseUrl()}/capabilities`);
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+  return (await response.json()) as EditingCapabilitiesResponse;
 }
 
 export async function segment(

@@ -16,6 +16,12 @@ import {
   zoomViewportAtPoint,
 } from "@/lib/canvasView";
 import { shouldReloadCanvasImage } from "@/lib/canvasImageSource";
+import {
+  canvasBitmapSize,
+  readStageSize,
+  shouldSkipStageRedraw,
+  type StageSize,
+} from "@/lib/canvasStage";
 import { drawMaskOverlay } from "@/lib/mask";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -36,6 +42,7 @@ interface EditorCanvasProps {
   onBrushStroke: (x: number, y: number, mode: "brush" | "erase") => void;
   onStrokeStart: () => void;
   onStrokeEnd: () => void;
+  onImageDecodeError?: () => void;
 }
 
 type PointerHud = {
@@ -62,9 +69,12 @@ export function EditorCanvas({
   onBrushStroke,
   onStrokeStart,
   onStrokeEnd,
+  onImageDecodeError,
 }: EditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lastStageSizeRef = useRef<StageSize | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const loadedSourceUrlRef = useRef<string | null>(null);
   const imageUrlRef = useRef<string | null>(imageUrl);
@@ -79,6 +89,8 @@ export function EditorCanvas({
   const pointerPosRef = useRef<PointerHud | null>(null);
   const viewportRef = useRef(viewport);
   const redrawRef = useRef<() => void>(() => {});
+  const onImageDecodeErrorRef = useRef(onImageDecodeError);
+  onImageDecodeErrorRef.current = onImageDecodeError;
   const [pointerHud, setPointerHud] = useState<PointerHud | null>(null);
   const [isPanning, setIsPanning] = useState(false);
 
@@ -112,25 +124,23 @@ export function EditorCanvas({
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
-    const container = containerRef.current;
+    const stage = stageRef.current;
     const img = imageRef.current;
-    if (!canvas || !container || !imageSize) return;
+    if (!canvas || !stage || !imageSize) return;
 
-    const rect = container.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
+    const stageSize = readStageSize(stage);
+    if (stageSize.width <= 0 || stageSize.height <= 0) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const cssWidth = rect.width;
-    const cssHeight = rect.height;
-    const pixelWidth = Math.floor(cssWidth * dpr);
-    const pixelHeight = Math.floor(cssHeight * dpr);
+    const cssWidth = stageSize.width;
+    const cssHeight = stageSize.height;
+    const bitmap = canvasBitmapSize(cssWidth, cssHeight, dpr);
 
-    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-      canvas.width = pixelWidth;
-      canvas.height = pixelHeight;
-      canvas.style.width = `${cssWidth}px`;
-      canvas.style.height = `${cssHeight}px`;
+    if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
     }
+    lastStageSizeRef.current = stageSize;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -238,14 +248,17 @@ export function EditorCanvas({
       if (imageUrlRef.current !== sourceUrl) return;
       imageRef.current = img;
       loadedSourceUrlRef.current = sourceUrl;
-      redrawRef.current();
+      requestAnimationFrame(() => {
+        redrawRef.current();
+      });
     };
     img.onerror = () => {
       if (imageUrlRef.current !== sourceUrl) return;
-      // Keep the last successfully decoded frame if a reload fails.
       if (loadedSourceUrlRef.current === sourceUrl && imageRef.current) {
         redrawRef.current();
+        return;
       }
+      onImageDecodeErrorRef.current?.();
     };
     img.src = sourceUrl;
     return () => {
@@ -257,6 +270,23 @@ export function EditorCanvas({
   useEffect(() => {
     redraw();
   }, [mask, redraw, viewport]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      const box = entry?.contentBoxSize?.[0];
+      const next: StageSize = box
+        ? { width: box.inlineSize, height: box.blockSize }
+        : readStageSize(stage);
+      if (shouldSkipStageRedraw(lastStageSizeRef.current, next)) return;
+      redrawRef.current();
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const onResize = () => redraw();
@@ -293,14 +323,15 @@ export function EditorCanvas({
   }, [endInteraction]);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !imageSize) return;
+    const stage = stageRef.current;
+    if (!stage || !imageSize) return;
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const rect = container.getBoundingClientRect();
       const layout = layoutRef.current;
       if (!layout) return;
+      const rect = stage.getBoundingClientRect();
+      const size = readStageSize(stage);
       const factor = event.deltaY > 0 ? 1 / 1.12 : 1.12;
       onViewportChange(
         zoomViewportAtPoint(
@@ -309,14 +340,14 @@ export function EditorCanvas({
           event.clientX - rect.left,
           event.clientY - rect.top,
           layout,
-          { width: rect.width, height: rect.height },
+          { width: size.width, height: size.height },
           imageSize
         )
       );
     };
 
-    container.addEventListener("wheel", onWheel, { passive: false });
-    return () => container.removeEventListener("wheel", onWheel);
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
   }, [imageSize, onViewportChange]);
 
   const updatePointerHud = useCallback(
@@ -451,7 +482,7 @@ export function EditorCanvas({
       className="editor-canvas-wrap"
       style={{
         flex: 1,
-        minHeight: 360,
+        minHeight: 0,
         background: "#1a1d24",
         borderRadius: 8,
         border: "1px solid #2a2f3a",
@@ -511,7 +542,11 @@ export function EditorCanvas({
         </div>
       ) : null}
 
-      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+      <div
+        ref={stageRef}
+        className="editor-canvas-stage"
+        style={{ flex: 1, position: "relative", minHeight: 0 }}
+      >
         {!imageUrl ? (
           <div
             style={{

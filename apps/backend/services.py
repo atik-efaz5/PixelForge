@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import time
 from typing import Any
 
 import numpy as np
@@ -25,10 +26,12 @@ from apps.backend.validation import (
 )
 from apps.backend.isolated_runner import ground_via_isolated_env, inpaint_via_isolated_env
 from models.errors import ModelLoadError
+from models.moebius_geometry import try_uniform_neighbor_fill
 from models.registry import get_adapter, known_models
 from models.router import list_routing_catalog
 from models.types import (
     BackendType,
+    InpaintCandidate,
     InpaintCandidatesResult,
     InpaintParams,
     InpaintingResult,
@@ -54,6 +57,30 @@ _MASK_INPAINT_THRESHOLD = MASK_INPAINT_THRESHOLD
 # Mask PNG contract (documented for API clients):
 # - Upload: grayscale or RGB PNG where pixel value >= 128 means inpaint (True).
 # - Download: single-channel PNG, 255 = inpaint, 0 = preserve.
+
+
+def _uses_isolated_moebius(backend: str) -> bool:
+    """True when in-process Moebius load may fall back to the isolated worker."""
+    key = backend.strip().lower()
+    return key in {"", "auto", "automatic", "moebius"}
+
+
+def _solid_fill_if_uniform(
+    image: np.ndarray, mask: np.ndarray
+) -> InpaintingResult | None:
+    """Skip Moebius when the page around the mask is almost one color (white paper)."""
+    t0 = time.perf_counter()
+    filled = try_uniform_neighbor_fill(image, mask)
+    if filled is None:
+        return None
+    return InpaintingResult(
+        result=filled,
+        latency_ms=round((time.perf_counter() - t0) * 1000.0, 3),
+        memory_mb=None,
+        model="solid_fill",
+        backend=BackendType.CPU,
+        metadata={"solid_fill": True, "reason": "uniform_neighbors"},
+    )
 
 
 class ImageEditingService:
@@ -128,12 +155,15 @@ class ImageEditingService:
     ) -> InpaintingResult:
         """Localized mask edit only. Rejects non-empty text instructions at the pipeline layer."""
         logger.info("service_edit_localized backend=%s", backend)
+        solid = _solid_fill_if_uniform(image, mask)
+        if solid is not None:
+            return solid
         try:
             return self._pipeline.edit_localized(
                 image, mask, backend=backend, params=params
             )
         except ModelLoadError as exc:
-            if backend.strip().lower() != "moebius":
+            if not _uses_isolated_moebius(backend):
                 raise
             logger.warning(
                 "in-process Moebius load failed; using isolated env: %s", exc
@@ -167,10 +197,13 @@ class ImageEditingService:
         params: InpaintParams | None = None,
     ) -> InpaintingResult:
         logger.info("service_inpaint backend=%s", backend)
+        solid = _solid_fill_if_uniform(image, mask)
+        if solid is not None:
+            return solid
         try:
             return self._pipeline.inpaint(image, mask, backend=backend, params=params)
         except ModelLoadError as exc:
-            if backend.strip().lower() != "moebius":
+            if not _uses_isolated_moebius(backend):
                 raise
             logger.warning("in-process Moebius load failed; using isolated env: %s", exc)
             return inpaint_via_isolated_env(image, mask, params=params)
@@ -185,12 +218,38 @@ class ImageEditingService:
         count: int = 1,
     ) -> InpaintCandidatesResult:
         logger.info("service_generate_candidates backend=%s count=%d", backend, count)
+        if count == 1:
+            solid = _solid_fill_if_uniform(image, mask)
+            if solid is not None:
+                from evaluation.reproducibility import sha256_bytes
+
+                cand = InpaintCandidate(
+                    candidate_id="candidate_1",
+                    result=solid.result,
+                    seed=None,
+                    latency_ms=solid.latency_ms,
+                    memory_mb=solid.memory_mb,
+                    model=solid.model,
+                    backend=solid.backend,
+                    output_hash=sha256_bytes(solid.result.tobytes()),
+                    validity_status="valid",
+                    generation_params={},
+                    metadata=dict(solid.metadata),
+                )
+                return InpaintCandidatesResult(
+                    candidates=[cand],
+                    selected_candidate_id="candidate_1",
+                    ranking={},
+                    model=solid.model,
+                    backend=solid.backend,
+                    metadata=dict(solid.metadata),
+                )
         try:
             return self._pipeline.generate_candidates(
                 image, mask, backend=backend, count=count, params=params
             )
         except ModelLoadError as exc:
-            if backend.strip().lower() != "moebius" or count != 1:
+            if not _uses_isolated_moebius(backend) or count != 1:
                 raise
             logger.warning(
                 "in-process Moebius load failed for single candidate; using isolated env: %s",
@@ -199,7 +258,6 @@ class ImageEditingService:
             single = inpaint_via_isolated_env(image, mask, params=params)
             from evaluation.candidate_ranking import rank_inpaint_candidates
             from evaluation.reproducibility import sha256_bytes
-            from models.types import InpaintCandidate
 
             ranking = rank_inpaint_candidates(
                 image, mask, [("candidate_1", single.result)]
@@ -254,14 +312,12 @@ class ImageEditingService:
                 grounding_backend=grounding_backend,
             )
         except ModelLoadError as exc:
-            if grounding_backend.strip().lower() != "grounding_dino":
-                raise
-            logger.warning(
-                "in-process Grounding DINO load failed; using isolated env: %s", exc
-            )
-            grounding = ground_via_isolated_env(image, text_prompt)
-            return self._pipeline.select_from_grounding(
-                image, grounding, detection_index=detection_index
+            return self._select_from_isolated_grounding(
+                image,
+                text_prompt,
+                detection_index=detection_index,
+                grounding_backend=grounding_backend,
+                cause=exc,
             )
 
     def select_smart(
@@ -282,14 +338,56 @@ class ImageEditingService:
             y,
             text_prompt,
         )
-        return self._pipeline.select_smart(
-            image,
-            x=x,
-            y=y,
-            text_prompt=text_prompt,
-            selection_mode=selection_mode,
-            detection_index=detection_index,
-            grounding_backend=grounding_backend,
+        prompt = (text_prompt or "").strip()
+        try:
+            return self._pipeline.select_smart(
+                image,
+                x=x,
+                y=y,
+                text_prompt=text_prompt,
+                selection_mode=selection_mode,
+                detection_index=detection_index,
+                grounding_backend=grounding_backend,
+            )
+        except ModelLoadError as exc:
+            if not prompt:
+                raise
+            text = self._select_from_isolated_grounding(
+                image,
+                prompt,
+                detection_index=0 if detection_index is None else detection_index,
+                grounding_backend=grounding_backend,
+                cause=exc,
+            )
+            return SmartSelectionResult(
+                mask=text.mask,
+                method="text",
+                confidence_tier="MEDIUM",
+                selection_mode=selection_mode.strip().lower() or "smart",
+                segmentation=text.segmentation,
+                ranking={},
+                grounding=text.grounding,
+                selected_detection=text.selected_detection,
+                metadata={**text.metadata, "isolated_grounding": True},
+            )
+
+    def _select_from_isolated_grounding(
+        self,
+        image: np.ndarray,
+        text_prompt: str,
+        *,
+        detection_index: int,
+        grounding_backend: str,
+        cause: ModelLoadError,
+    ) -> TextSelectionResult:
+        if grounding_backend.strip().lower() != "grounding_dino":
+            raise cause
+        logger.warning(
+            "in-process Grounding DINO load failed; using isolated env: %s", cause
+        )
+        grounding = ground_via_isolated_env(image, text_prompt)
+        return self._pipeline.select_from_grounding(
+            image, grounding, detection_index=detection_index
         )
 
     def remove_object(

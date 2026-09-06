@@ -12,6 +12,7 @@ const MODEL_NAMES: Record<string, string> = {
   moebius: "Moebius",
   pixelhacker: "PixelHacker",
   instruct_pix2pix: "InstructPix2Pix",
+  solid_fill: "Page fill",
 };
 
 const BACKEND_NAMES: Record<string, string> = {

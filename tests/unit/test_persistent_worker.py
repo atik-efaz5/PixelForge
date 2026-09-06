@@ -196,6 +196,52 @@ class TestIsolatedRunnerRouting(unittest.TestCase):
         oneshot_mock.assert_called_once()
         persistent_mock.assert_not_called()
 
+    @mock.patch("apps.backend.isolated_runner.inpaint_via_persistent_worker")
+    @mock.patch("apps.backend.isolated_runner.inpaint_via_oneshot_subprocess")
+    def test_falls_back_to_oneshot_on_model_inference_error(
+        self, oneshot_mock: mock.Mock, persistent_mock: mock.Mock
+    ) -> None:
+        import numpy as np
+
+        from apps.backend.isolated_runner import inpaint_via_isolated_env
+
+        image = np.zeros((4, 4, 3), dtype=np.uint8)
+        mask = np.zeros((4, 4), dtype=bool)
+        persistent_mock.side_effect = ModelInferenceError("Moebius inference failed.")
+        oneshot_mock.return_value = mock.Mock()
+
+        with mock.patch(
+            "apps.backend.isolated_runner.persistent_moebius_enabled",
+            return_value=True,
+        ):
+            inpaint_via_isolated_env(image, mask)
+        persistent_mock.assert_called_once()
+        oneshot_mock.assert_called_once()
+
+    def test_worker_error_includes_type_and_cause(self) -> None:
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "moebius_persistent_worker",
+            Path("scripts/moebius_persistent_worker.py"),
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        try:
+            raise RuntimeError("shape mismatch")
+        except RuntimeError as inner:
+            try:
+                raise ModelInferenceError("Moebius inference failed.") from inner
+            except ModelInferenceError as outer:
+                message = module._error_message(outer)
+
+        self.assertIn("ModelInferenceError", message)
+        self.assertIn("Moebius inference failed.", message)
+        self.assertIn("RuntimeError", message)
+        self.assertIn("shape mismatch", message)
+
 
 if __name__ == "__main__":
     unittest.main()

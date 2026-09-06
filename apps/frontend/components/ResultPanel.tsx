@@ -294,6 +294,7 @@ function PreviewTile({
           display: "grid",
           placeItems: "center",
         }}
+        data-preview-tile=""
       >
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element

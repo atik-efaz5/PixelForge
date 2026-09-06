@@ -189,8 +189,8 @@ export function drawMaskOverlay(
     for (let i = 0; i < mask.length; i += 1) {
       if (!mask[i] && dist[i] <= 0) continue;
       const alpha = mask[i]
-        ? 180
-        : Math.max(0, Math.round(140 * (1 - dist[i] / feather)));
+        ? 220
+        : Math.max(0, Math.round(160 * (1 - dist[i] / feather)));
       if (alpha <= 0) continue;
       const idx = i * 4;
       imageData.data[idx] = 56;
@@ -207,7 +207,7 @@ export function drawMaskOverlay(
       imageData.data[idx] = 56;
       imageData.data[idx + 1] = 189;
       imageData.data[idx + 2] = 248;
-      imageData.data[idx + 3] = 140;
+      imageData.data[idx + 3] = 200;
     }
     octx.putImageData(imageData, 0, 0);
   }

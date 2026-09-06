@@ -31,6 +31,18 @@ def _png_bytes(h: int = 32, w: int = 32) -> bytes:
     return buf.getvalue()
 
 
+def _photo_png(h: int = 32, w: int = 32) -> bytes:
+    yy, xx = np.ogrid[:h, :w]
+    arr = np.zeros((h, w, 3), dtype=np.uint8)
+    arr[..., 0] = (xx * 7 + yy * 3) % 256
+    arr[..., 1] = (xx * 5 + yy * 11) % 256
+    arr[..., 2] = (xx * 13 + yy * 2) % 256
+    img = Image.fromarray(arr, mode="RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def _mask_png(h: int = 32, w: int = 32) -> bytes:
     arr = np.zeros((h, w), dtype=np.uint8)
     arr[8:24, 8:24] = 255
@@ -54,7 +66,11 @@ class TestBackendAPI(unittest.TestCase):
     def test_health(self) -> None:
         resp = self.client.get("/health")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {"status": "ok"})
+        body = resp.json()
+        self.assertEqual(body["status"], "ok")
+        self.assertEqual(body["version"], "0.1.0")
+        self.assertIn("max_upload_bytes", body)
+        self.assertIn("max_concurrent_generations", body)
 
     def test_models(self) -> None:
         resp = self.client.get("/models")
@@ -96,13 +112,13 @@ class TestBackendAPI(unittest.TestCase):
         resp = self.client.post(
             "/inpaint",
             files={
-                "image": ("img.png", _png_bytes(), "image/png"),
+                "image": ("img.png", _photo_png(), "image/png"),
                 "mask": ("mask.png", _mask_png(), "image/png"),
             },
             data={"backend": "unknown"},
         )
         self.assertEqual(resp.status_code, 400)
-        self.assertEqual(resp.json()["error"], "unsupported_backend")
+        self.assertEqual(resp.json()["error"]["code"], "unsupported_backend")
 
     def test_segment_success_mocked(self) -> None:
         mask = validate_mask(np.zeros((32, 32), dtype=bool))
@@ -138,7 +154,7 @@ class TestBackendAPI(unittest.TestCase):
         resp = self.client.post(
             "/inpaint",
             files={
-                "image": ("img.png", _png_bytes(), "image/png"),
+                "image": ("img.png", _photo_png(), "image/png"),
                 "mask": ("mask.png", _mask_png(), "image/png"),
             },
             data={"backend": "moebius"},

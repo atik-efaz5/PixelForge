@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { editByInstruction, inpaint, segment, selectByText, selectSmart } from "@/lib/api";
+import {
+  editByInstruction,
+  editingCapabilities,
+  inpaint,
+  routing,
+  segment,
+  selectByText,
+  selectSmart,
+} from "@/lib/api";
+import { isInstructionEditAvailable } from "@/lib/editorCapabilities";
+import { requireInpaintMask } from "@/lib/maskRefine";
+import { canAttemptLocalRemove, extractObjectPrompt } from "@/lib/objectPrompt";
 import { fitViewport, zoomIn, zoomOut, type CanvasViewport } from "@/lib/canvasView";
 import { deriveEditorPhase, PHASE_LABELS } from "@/lib/editorPhase";
 import { toUserFacingError, type UserFacingError } from "@/lib/formatError";
@@ -107,6 +118,7 @@ export function ImageEditor() {
   const [resultBackend, setResultBackend] = useState<string | undefined>();
   const [operationElapsedMs, setOperationElapsedMs] = useState(0);
   const [lastRetry, setLastRetry] = useState<(() => void) | null>(null);
+  const [instructionEditAvailable, setInstructionEditAvailable] = useState(false);
   const maskRef = useRef<Uint8Array | null>(null);
   const aiMaskRef = useRef<Uint8Array | null>(null);
   const maskHistoryRef = useRef(new MaskEditHistory());
@@ -119,7 +131,7 @@ export function ImageEditor() {
 
   const editorPhase = deriveEditorPhase({
     status,
-    error: userError?.message ?? null,
+    error: null,
     hasMask: Boolean(mask && maskHasInpaint(mask)),
     hasPendingResult,
     tool,
@@ -313,9 +325,22 @@ export function ImageEditor() {
       setResultBackend(undefined);
       const entry = sessionHistoryRef.current.reset(url);
       applySnapshot(entry);
+      const emptyMask = createEmptyMask(size.width, size.height);
+      maskRef.current = emptyMask;
+      setMask(emptyMask);
+      updateMaskPreview(emptyMask, size);
     },
-    [applySnapshot, clearError]
+    [applySnapshot, clearError, updateMaskPreview]
   );
+
+  const handleImageDecodeError = useCallback(() => {
+    if (!imageUrl || !sourceUrlRegistryRef.current.isActive(imageUrl)) return;
+    setError(
+      new Error(
+        "The uploaded image could not be displayed. Try uploading the image again."
+      )
+    );
+  }, [imageUrl, setError]);
 
   const handleNewSession = useCallback(() => {
     sourceUrlRegistryRef.current.release();
@@ -389,6 +414,7 @@ export function ImageEditor() {
       lastSelectionMetaRef.current = selection;
       setHasAiMask(true);
       applyMask(decoded);
+      setShowMaskOverlay(true);
       recordSession({
         operation: "SELECT",
         label: "Object selected",
@@ -401,65 +427,54 @@ export function ImageEditor() {
     [applyMask, imageSize, recordSession]
   );
 
-  const handleFindObject = useCallback(async () => {
-    if (!imageFile || !imageSize || busy) return;
-    const prompt = textPrompt.trim();
+  const handleFindObject = useCallback(async (
+    promptOverride?: string,
+    modeOverride?: SelectionMode
+  ): Promise<boolean> => {
+    if (!imageFile || !imageSize || busy) return false;
+    const prompt = (promptOverride ?? textPrompt).trim();
     if (!prompt) {
       setError("Enter an object description to search.");
-      return;
+      return false;
+    }
+    if (promptOverride && promptOverride !== textPrompt) {
+      setTextPrompt(prompt);
+    }
+    const mode: SelectionMode = modeOverride ?? "text";
+    if (mode !== selectionMode) {
+      setSelectionMode(mode);
     }
     setStatus("grounding");
     clearError();
     try {
-      if (selectionMode === "text") {
-        const { blob, metadata } = await selectByText(
-          imageFile,
-          prompt,
-          detectionIndex
-        );
-        setDetections(metadata.detections || []);
-        setDetectionIndex(metadata.detection_index ?? 0);
-        setSelectionLine(
-          formatSelectionLine({
-            method: "text",
-            model: metadata.model,
-            groundingBackend: metadata.grounding_backend,
-            segmentationModel: metadata.segmentation_model,
-          })
-        );
-        await applyMaskFromBlob(blob, {
+      const { blob, metadata } = await selectByText(
+        imageFile,
+        prompt,
+        detectionIndex
+      );
+      setDetections(metadata.detections || []);
+      setDetectionIndex(metadata.detection_index ?? 0);
+      setSelectionLine(
+        formatSelectionLine({
           method: "text",
-          prompt,
-          label: metadata.selected_label ?? undefined,
-          detectionIndex: metadata.detection_index ?? undefined,
-        });
-      } else {
-        const { blob, metadata } = await selectSmart(imageFile, {
-          selectionMode,
-          prompt,
-          detectionIndex,
-        });
-        setDetections(metadata.detections || []);
-        setDetectionIndex(metadata.detection_index ?? 0);
-        setSelectionLine(
-          formatSmartSelectionLine({
-            selectionMode,
-            method: metadata.method as "point" | "text",
-            confidenceTier: metadata.confidence_tier,
-          })
-        );
-        await applyMaskFromBlob(blob, {
-          method: "text",
-          prompt,
-          label: metadata.selected_label ?? undefined,
-          detectionIndex: metadata.detection_index ?? undefined,
-        });
-      }
+          model: metadata.model,
+          groundingBackend: metadata.grounding_backend,
+          segmentationModel: metadata.segmentation_model,
+        })
+      );
+      await applyMaskFromBlob(blob, {
+        method: "text",
+        prompt,
+        label: metadata.selected_label ?? undefined,
+        detectionIndex: metadata.detection_index ?? undefined,
+      });
+      return true;
     } catch (err) {
       setError(err);
       setLastRetry(() => () => {
-        void handleFindObject();
+        void handleFindObject(prompt);
       });
+      return false;
     } finally {
       setStatus("idle");
     }
@@ -483,51 +498,29 @@ export function ImageEditor() {
       clearError();
       try {
         const prompt = textPrompt.trim();
-        if (selectionMode === "text") {
-          const { blob, metadata } = await selectByText(imageFile, prompt, index);
-          setDetections(metadata.detections || []);
-          setSelectionLine(
-            formatSelectionLine({
-              method: "text",
-              model: metadata.model,
-              groundingBackend: metadata.grounding_backend,
-              segmentationModel: metadata.segmentation_model,
-            })
-          );
-          await applyMaskFromBlob(blob, {
+        const { blob, metadata } = await selectByText(imageFile, prompt, index);
+        setDetections(metadata.detections || []);
+        setSelectionLine(
+          formatSelectionLine({
             method: "text",
-            prompt,
-            label: metadata.selected_label ?? undefined,
-            detectionIndex: index,
-          });
-        } else {
-          const { blob, metadata } = await selectSmart(imageFile, {
-            selectionMode,
-            prompt,
-            detectionIndex: index,
-          });
-          setDetections(metadata.detections || []);
-          setSelectionLine(
-            formatSmartSelectionLine({
-              selectionMode,
-              method: metadata.method as "point" | "text",
-              confidenceTier: metadata.confidence_tier,
-            })
-          );
-          await applyMaskFromBlob(blob, {
-            method: "text",
-            prompt,
-            label: metadata.selected_label ?? undefined,
-            detectionIndex: index,
-          });
-        }
+            model: metadata.model,
+            groundingBackend: metadata.grounding_backend,
+            segmentationModel: metadata.segmentation_model,
+          })
+        );
+        await applyMaskFromBlob(blob, {
+          method: "text",
+          prompt,
+          label: metadata.selected_label ?? undefined,
+          detectionIndex: index,
+        });
       } catch (err) {
         setError(err);
       } finally {
         setStatus("idle");
       }
     },
-    [applyMaskFromBlob, busy, clearError, imageFile, selectionMode, setError, textPrompt]
+    [applyMaskFromBlob, busy, clearError, imageFile, setError, textPrompt]
   );
 
   const handlePointSelect = useCallback(
@@ -614,6 +607,11 @@ export function ImageEditor() {
   );
 
   const handleExpandMask = useCallback(() => {
+    const empty = requireInpaintMask(maskRef.current);
+    if (empty) {
+      setError(empty);
+      return;
+    }
     if (!imageSize || !maskRef.current) return;
     const next = dilateMask(
       maskRef.current,
@@ -623,9 +621,14 @@ export function ImageEditor() {
     );
     commitMaskEdit(next, { recordHistory: true });
     recordMaskRefined("Mask expanded");
-  }, [commitMaskEdit, imageSize, morphAmount, recordMaskRefined]);
+  }, [commitMaskEdit, imageSize, morphAmount, recordMaskRefined, setError]);
 
   const handleShrinkMask = useCallback(() => {
+    const empty = requireInpaintMask(maskRef.current);
+    if (empty) {
+      setError(empty);
+      return;
+    }
     if (!imageSize || !maskRef.current) return;
     const next = erodeMask(
       maskRef.current,
@@ -635,7 +638,7 @@ export function ImageEditor() {
     );
     commitMaskEdit(next, { recordHistory: true });
     recordMaskRefined("Mask shrunk");
-  }, [commitMaskEdit, imageSize, morphAmount, recordMaskRefined]);
+  }, [commitMaskEdit, imageSize, morphAmount, recordMaskRefined, setError]);
 
   const handleUndo = useCallback(() => {
     if (!maskRef.current) return;
@@ -663,6 +666,11 @@ export function ImageEditor() {
   }, [commitMaskEdit, recordSession, resultUrl]);
 
   const handleClearMask = useCallback(() => {
+    const empty = requireInpaintMask(maskRef.current);
+    if (empty) {
+      setError(empty);
+      return;
+    }
     if (!imageSize) return;
     const cleared = createEmptyMask(imageSize.width, imageSize.height);
     commitMaskEdit(cleared, { recordHistory: true });
@@ -674,14 +682,19 @@ export function ImageEditor() {
       resultUrl,
       selection: lastSelectionMetaRef.current,
     });
-  }, [commitMaskEdit, imageSize, recordSession, resultUrl]);
+  }, [commitMaskEdit, imageSize, recordSession, resultUrl, setError]);
 
-  const handleGenerate = useCallback(async () => {
-    if (!imageFile || !imageSize || !maskRef.current || busy) return;
+  const handleGenerate = useCallback(async (options?: {
+    force?: boolean;
+    backend?: InpaintBackend;
+  }) => {
+    if (!imageFile || !imageSize || !maskRef.current) return;
+    if (!options?.force && busy) return;
     if (!maskHasInpaint(maskRef.current)) {
       setError("Draw or select a mask region before generating.");
       return;
     }
+    const requestedBackend = options?.backend ?? backend;
     setStatus("generating");
     clearError();
     try {
@@ -691,7 +704,9 @@ export function ImageEditor() {
         imageSize.height
       );
       const candidateCount = generateTwoCandidates ? 2 : 1;
-      const response = await inpaint(imageFile, maskBlob, backend, { candidateCount });
+      const response = await inpaint(imageFile, maskBlob, requestedBackend, {
+        candidateCount,
+      });
 
       if (response.mode === "single") {
         setPendingCandidates([]);
@@ -702,7 +717,7 @@ export function ImageEditor() {
         setResultBackend(response.metadata.backend);
         setInpaintLine(
           formatInpaintLine({
-            requestedBackend: backend,
+            requestedBackend,
             model: response.metadata.model,
             backend: response.metadata.backend,
             routing,
@@ -716,7 +731,7 @@ export function ImageEditor() {
           resultUrl: url,
           selection: lastSelectionMetaRef.current,
           inpaint: {
-            backend,
+            backend: requestedBackend,
             model: response.metadata.model,
             latencyMs: response.metadata.latency_ms ?? undefined,
             candidateCount: 1,
@@ -736,7 +751,7 @@ export function ImageEditor() {
       setResultBackend(metadata.backend);
       setInpaintLine(
         formatInpaintLine({
-          requestedBackend: backend,
+          requestedBackend,
           model: metadata.model,
           backend: metadata.backend,
           routing,
@@ -750,7 +765,7 @@ export function ImageEditor() {
         resultUrl: recommended.url,
         selection: lastSelectionMetaRef.current,
         inpaint: {
-          backend,
+          backend: requestedBackend,
           model: metadata.model,
           latencyMs: metadata.latency_ms ?? undefined,
           candidateCount: 2,
@@ -765,9 +780,13 @@ export function ImageEditor() {
         },
       });
     } catch (err) {
+      setShowMaskOverlay(true);
       setError(err);
       setLastRetry(() => () => {
-        void handleGenerate();
+        void handleGenerate({
+          force: true,
+          backend: requestedBackend,
+        });
       });
     } finally {
       setStatus("idle");
@@ -781,6 +800,35 @@ export function ImageEditor() {
     imageSize,
     recordSession,
     setError,
+  ]);
+
+  const handleLocalRemove = useCallback(async () => {
+    if (!imageFile || !imageSize || busy) return;
+    if (maskRef.current && maskHasInpaint(maskRef.current)) {
+      await handleGenerate({ force: true, backend: "moebius" });
+      return;
+    }
+    const prompt = extractObjectPrompt(editInstruction) || textPrompt.trim();
+    if (!prompt) {
+      setError(
+        "Select or brush a region first, or describe the object to remove."
+      );
+      return;
+    }
+    setSelectionMode("text");
+    const found = await handleFindObject(prompt, "text");
+    if (!found) return;
+    setShowMaskOverlay(true);
+    await handleGenerate({ force: true, backend: "moebius" });
+  }, [
+    busy,
+    editInstruction,
+    handleFindObject,
+    handleGenerate,
+    imageFile,
+    imageSize,
+    setError,
+    textPrompt,
   ]);
 
   const handleUseResult = useCallback(() => {
@@ -885,6 +933,12 @@ export function ImageEditor() {
   );
 
   const handleApplyInstruction = useCallback(async () => {
+    if (!instructionEditAvailable) {
+      setError(
+        "Requested backend 'instruct_pix2pix' is not available for global_instruction_edit."
+      );
+      return;
+    }
     if (!imageFile || busy) return;
     const instruction = editInstruction.trim();
     if (!instruction) {
@@ -922,7 +976,25 @@ export function ImageEditor() {
     } finally {
       setStatus("idle");
     }
-  }, [busy, clearError, editInstruction, imageFile, recordSession, setError]);
+  }, [busy, clearError, editInstruction, imageFile, instructionEditAvailable, recordSession, setError]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([routing(), editingCapabilities()])
+      .then(([routingData, capabilities]) => {
+        if (!cancelled) {
+          setInstructionEditAvailable(
+            isInstructionEditAvailable(routingData, capabilities)
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setInstructionEditAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (mask && imageSize) {
@@ -1009,14 +1081,15 @@ export function ImageEditor() {
   ]);
 
   useEffect(() => {
-    return () => {
-      sourceUrlRegistryRef.current.release();
+    const onPageHide = () => {
       sessionHistoryRef.current.dispose();
     };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
   }, []);
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <header
         style={{
           padding: "14px 20px",
@@ -1033,28 +1106,32 @@ export function ImageEditor() {
       </header>
 
       <div className="editor-layout" style={{ flex: 1, display: "flex", minHeight: 0 }}>
-        <main className="editor-main" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, padding: 20, gap: 0 }}>
+        <main
+          className="editor-main"
+          style={{ flex: 1, minWidth: 0, padding: 20, gap: 0 }}
+        >
           {userError ? (
             <ErrorBanner
               error={userError}
               onDismiss={clearError}
               onRetry={lastRetry ?? undefined}
             />
-          ) : null}
-          <div
-            aria-live="polite"
-            style={{
-              marginBottom: 12,
-              padding: "8px 12px",
-              borderRadius: 6,
-              background: editorPhase === "error" ? "#3f1d1d" : "#1a1d24",
-              border: "1px solid #2a2f3a",
-              color: editorPhase === "error" ? "#fecaca" : "#9aa3b2",
-              fontSize: 13,
-            }}
-          >
-            {phaseLabel}
-          </div>
+          ) : (
+            <div
+              aria-live="polite"
+              style={{
+                marginBottom: 12,
+                padding: "8px 12px",
+                borderRadius: 6,
+                background: "#1a1d24",
+                border: "1px solid #2a2f3a",
+                color: "#9aa3b2",
+                fontSize: 13,
+              }}
+            >
+              {phaseLabel}
+            </div>
+          )}
 
           <ModelStatusPanel selection={selectionLine} inpainting={inpaintLine} />
 
@@ -1067,24 +1144,27 @@ export function ImageEditor() {
             />
           ) : null}
 
-          <EditorCanvas
-            imageUrl={imageUrl}
-            imageSize={imageSize}
-            mask={mask}
-            tool={tool}
-            brushRadius={brushRadius}
-            eraserRadius={eraserRadius}
-            featherRadius={featherRadius}
-            showOverlay={showMaskOverlay}
-            showMaskOnly={showMaskOnly}
-            disabled={busy || !imageUrl}
-            viewport={viewport}
-            onViewportChange={setViewport}
-            onPointSelect={handlePointSelect}
-            onBrushStroke={handleBrushStroke}
-            onStrokeStart={handleStrokeStart}
-            onStrokeEnd={handleStrokeEnd}
-          />
+          <div className="editor-canvas-region">
+            <EditorCanvas
+              imageUrl={imageUrl}
+              imageSize={imageSize}
+              mask={mask}
+              tool={tool}
+              brushRadius={brushRadius}
+              eraserRadius={eraserRadius}
+              featherRadius={featherRadius}
+              showOverlay={showMaskOverlay}
+              showMaskOnly={showMaskOnly}
+              disabled={busy || !imageUrl}
+              viewport={viewport}
+              onViewportChange={setViewport}
+              onPointSelect={handlePointSelect}
+              onBrushStroke={handleBrushStroke}
+              onStrokeStart={handleStrokeStart}
+              onStrokeEnd={handleStrokeEnd}
+              onImageDecodeError={handleImageDecodeError}
+            />
+          </div>
 
           <HistoryPanel
             entries={sessionEntries}
@@ -1114,23 +1194,10 @@ export function ImageEditor() {
               onSelect={handleSelectCandidate}
             />
           ) : null}
-
-          <ResultPanel
-            originalUrl={imageUrl}
-            maskPreviewUrl={maskPreview}
-            resultUrl={resultUrl}
-            latencyMs={latencyMs}
-            maskLabel={
-              featherRadius > 0 ? "Edited mask (feather preview)" : "Edited mask"
-            }
-            hasAiMask={hasAiMask}
-            resultModel={resultModel}
-            resultBackend={resultBackend}
-            requestedBackend={backend}
-          />
         </main>
 
-        <ControlPanel
+        <div className="editor-sidebar-stack">
+          <ControlPanel
           hasImage={Boolean(imageUrl)}
           onNewSession={handleNewSession}
           selectionMode={selectionMode}
@@ -1168,15 +1235,51 @@ export function ImageEditor() {
           onRedo={handleRedo}
           onResetToAiMask={handleResetToAiMask}
           onClearMask={handleClearMask}
-          onGenerate={handleGenerate}
+          onGenerate={() => {
+            void handleGenerate();
+          }}
           onTextPromptChange={setTextPrompt}
-          onFindObject={handleFindObject}
+          onFindObject={() => {
+            void handleFindObject();
+          }}
           onDetectionIndexChange={handleDetectionIndexChange}
           editInstruction={editInstruction}
-          canApplyInstruction={Boolean(imageFile && editInstruction.trim())}
+          canApplyInstruction={Boolean(
+            imageFile && editInstruction.trim() && instructionEditAvailable
+          )}
+          instructionEditAvailable={instructionEditAvailable}
+          canLocalRemove={canAttemptLocalRemove({
+            hasImage: Boolean(imageFile),
+            hasInpaintMask: Boolean(mask && maskHasInpaint(mask)),
+            instruction: editInstruction,
+            selectPrompt: textPrompt,
+          })}
+          emphasizeGenerate={Boolean(imageFile && mask && maskHasInpaint(mask))}
           onEditInstructionChange={setEditInstruction}
           onApplyInstruction={handleApplyInstruction}
-        />
+          onLocalRemove={() => {
+            void handleLocalRemove();
+          }}
+          />
+
+          {imageUrl ? (
+            <div className="result-panel-sidebar" style={{ padding: "0 20px 20px" }}>
+              <ResultPanel
+                originalUrl={imageUrl}
+                maskPreviewUrl={maskPreview}
+                resultUrl={resultUrl}
+                latencyMs={latencyMs}
+                maskLabel={
+                  featherRadius > 0 ? "Edited mask (feather preview)" : "Edited mask"
+                }
+                hasAiMask={hasAiMask}
+                resultModel={resultModel}
+                resultBackend={resultBackend}
+                requestedBackend={backend}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
