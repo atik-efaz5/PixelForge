@@ -2,7 +2,10 @@
 
 **A research-backed intelligent image editing and inpainting platform.**
 
-**Live demo (frontend):** [https://frontend-mu-two-wzuqjziue7.vercel.app](https://frontend-mu-two-wzuqjziue7.vercel.app)
+| | |
+|---|---|
+| **Live demo** | [https://frontend-mu-two-wzuqjziue7.vercel.app](https://frontend-mu-two-wzuqjziue7.vercel.app) |
+| **Repository** | [github.com/atkialamisha/PixelForge](https://github.com/atkialamisha/PixelForge) |
 
 The public UI is hosted on Vercel. Editing still runs on the operator’s Mac (SAM 2 / Moebius via a Cloudflare tunnel to the local FastAPI backend). See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §16 and [`configs/tunnel.env.example`](configs/tunnel.env.example).
 
